@@ -25,7 +25,7 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-4 px-4 py-3 sm:justify-between">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3 sm:justify-between">
           <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium">
             <Link className="text-foreground" href="/admin">
               Supervisión
@@ -69,7 +69,7 @@ export default async function AdminLayout({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">{children}</main>
     </div>
   );
 }

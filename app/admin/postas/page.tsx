@@ -194,7 +194,7 @@ export default async function AdminPostasPage() {
       {postas.length === 0 ? (
         <p className="text-sm text-muted-foreground">No hay postas cargadas todavía.</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {postas.map((p) => {
             const al = alertaPorPosta.get(p.id);
             return (

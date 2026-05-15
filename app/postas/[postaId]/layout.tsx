@@ -45,7 +45,7 @@ export default async function PostaLayout({ children, params }: Props) {
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-3">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3">
           <div className="flex flex-wrap items-center gap-4 sm:justify-between">
             <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium">
               <Link className="text-foreground" href={`/postas/${postaId}/dashboard`}>
@@ -80,7 +80,7 @@ export default async function PostaLayout({ children, params }: Props) {
 
       {supervision ? (
         <div className="border-b border-amber-500/30 bg-amber-500/10">
-          <div className="mx-auto max-w-5xl px-4 py-2 text-xs text-amber-950 dark:text-amber-100">
+          <div className="mx-auto max-w-7xl px-4 py-2 text-xs text-amber-950 dark:text-amber-100">
             <strong className="font-medium">Solo lectura.</strong> El encargado registra
             en cada sección de su posta.{" "}
             <Link className="underline underline-offset-2" href="/admin">
@@ -91,7 +91,7 @@ export default async function PostaLayout({ children, params }: Props) {
         </div>
       ) : adminEnPosta ? (
         <div className="border-b border-sky-500/25 bg-sky-500/10">
-          <div className="mx-auto max-w-5xl px-4 py-2 text-xs text-sky-950 dark:text-sky-100">
+          <div className="mx-auto max-w-7xl px-4 py-2 text-xs text-sky-950 dark:text-sky-100">
             <strong className="font-medium">Administración general.</strong> Puede cargar
             ingresos de medicamentos y declarar stock AVIS en esta posta. Los descuentos
             diarios solo los registra el encargado.
@@ -99,7 +99,7 @@ export default async function PostaLayout({ children, params }: Props) {
         </div>
       ) : null}
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">{children}</main>
     </div>
   );
 }
