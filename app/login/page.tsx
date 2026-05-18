@@ -70,7 +70,33 @@ export default async function LoginPage({ searchParams }: PageProps) {
     errorCodigoForm === "perfil_inactivo";
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-12">
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-12">
+      <div className="flex max-w-md flex-col items-center gap-3 text-center">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
+          <svg
+            viewBox="0 0 24 24"
+            className="size-8"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+            />
+          </svg>
+        </div>
+        <div>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
+            Postas DESAM
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Inventario de medicamentos e insumos por posta rural
+          </p>
+        </div>
+      </div>
       <LoginForm redirectTo={redirectTo} errorCodigo={errorCodigoForm} />
 
       {necesitaCerrarSesion ? (

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AdminSubnav } from "@/components/admin/admin-subnav";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/actions/auth";
 import {
@@ -25,47 +25,24 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3 sm:justify-between">
-          <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium">
-            <Link className="text-foreground" href="/admin">
-              Supervisión
-            </Link>
-            <Link
-              className="text-muted-foreground hover:text-foreground"
-              href="/admin/pedidos"
-            >
-              Pedidos
-            </Link>
-            {puedeCatalogo ? (
-              <>
-                <Link
-                  className="text-muted-foreground hover:text-foreground"
-                  href="/admin/postas"
-                >
-                  Postas
-                </Link>
-                <Link
-                  className="text-muted-foreground hover:text-foreground"
-                  href="/admin/medicamentos"
-                >
-                  Medicamentos
-                </Link>
-              </>
-            ) : null}
-          </nav>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <span className="max-w-[16rem] truncate sm:max-w-xs">
-              {profile.email ?? profile.id}
-              <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                {profile.rol}
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-4 sm:justify-between">
+            <p className="text-sm font-semibold text-foreground">Administración</p>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <span className="max-w-[16rem] truncate sm:max-w-xs">
+                {profile.email ?? profile.id}
+                <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {profile.rol}
+                </span>
               </span>
-            </span>
-            <form action={signOutAction}>
-              <Button type="submit" variant="outline" size="sm">
-                Cerrar sesión
-              </Button>
-            </form>
+              <form action={signOutAction}>
+                <Button type="submit" variant="outline" size="sm">
+                  Cerrar sesión
+                </Button>
+              </form>
+            </div>
           </div>
+          <AdminSubnav puedeCatalogo={puedeCatalogo} />
         </div>
       </header>
 

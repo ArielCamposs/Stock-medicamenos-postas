@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { signOutAction } from "@/app/actions/auth";
+import { DismissibleBanner } from "@/components/posta/dismissible-banner";
+import { PwaInstallHint } from "@/components/posta/pwa-install-hint";
 import { PostaNavbarConnectionStatus } from "@/components/posta/posta-navbar-connection-status";
+import { PostaSyncBadge } from "@/components/posta/posta-sync-badge";
 import { PostaPerfilOfflineSync } from "@/components/posta/posta-perfil-offline-sync";
 import { PostaSubnav } from "@/components/posta/posta-subnav";
 import { Button } from "@/components/ui/button";
@@ -29,15 +32,21 @@ export default async function PostaLayout({ children, params }: Props) {
   }
 
   let tituloPosta = `Posta ${postaId.slice(0, 8)}…`;
+  let codigoPosta: string | null = null;
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("postas")
-    .select("nombre")
+    .select("nombre, codigo")
     .eq("id", postaId)
     .maybeSingle();
 
-  if (data && typeof data === "object" && "nombre" in data && data.nombre) {
-    tituloPosta = String(data.nombre);
+  if (data && typeof data === "object") {
+    if ("nombre" in data && data.nombre) {
+      tituloPosta = String(data.nombre);
+    }
+    if ("codigo" in data && (data.codigo === null || typeof data.codigo === "string")) {
+      codigoPosta = data.codigo as string | null;
+    }
   }
 
   const supervision = esSoloSupervisionPosta(profile);
@@ -51,11 +60,22 @@ export default async function PostaLayout({ children, params }: Props) {
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3">
           <div className="flex flex-wrap items-center gap-4 sm:justify-between">
             <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link className="text-foreground" href={`/postas/${postaId}/dashboard`}>
-                  {tituloPosta}
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <Link
+                  className="min-w-0 text-foreground hover:text-primary"
+                  href={`/postas/${postaId}/dashboard`}
+                >
+                  <span className="block truncate font-semibold leading-tight">
+                    {tituloPosta}
+                  </span>
+                  {codigoPosta ? (
+                    <span className="block font-mono text-[11px] font-normal text-muted-foreground">
+                      {codigoPosta}
+                    </span>
+                  ) : null}
                 </Link>
                 <PostaNavbarConnectionStatus />
+                <PostaSyncBadge postaId={postaId} />
               </div>
               {enlaceAdmin ? (
                 <Link
@@ -84,25 +104,23 @@ export default async function PostaLayout({ children, params }: Props) {
         </div>
       </header>
 
+      <PwaInstallHint />
+
       {supervision ? (
-        <div className="border-b border-amber-500/30 bg-amber-500/10">
-          <div className="mx-auto max-w-7xl px-4 py-2 text-xs text-amber-950 dark:text-amber-100">
-            <strong className="font-medium">Solo lectura.</strong> El encargado registra
-            en cada sección de su posta.{" "}
-            <Link className="underline underline-offset-2" href="/admin">
-              Ir al panel de supervisión
-            </Link>
-            .
-          </div>
-        </div>
+        <DismissibleBanner storageKey="banner_supervision_posta" variant="amber">
+          <strong className="font-medium">Solo lectura.</strong> El encargado registra en
+          cada sección de su posta.{" "}
+          <Link className="underline underline-offset-2" href="/admin">
+            Ir al panel de supervisión
+          </Link>
+          .
+        </DismissibleBanner>
       ) : adminEnPosta ? (
-        <div className="border-b border-sky-500/25 bg-sky-500/10">
-          <div className="mx-auto max-w-7xl px-4 py-2 text-xs text-sky-950 dark:text-sky-100">
-            <strong className="font-medium">Administración general.</strong> Puede cargar
-            ingresos de medicamentos y declarar stock AVIS en esta posta. Los descuentos
-            diarios solo los registra el encargado.
-          </div>
-        </div>
+        <DismissibleBanner storageKey="banner_admin_en_posta" variant="sky">
+          <strong className="font-medium">Administración general.</strong> Puede cargar
+          ingresos y stock AVIS en esta posta. Los descuentos diarios solo los registra el
+          encargado.
+        </DismissibleBanner>
       ) : null}
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">{children}</main>

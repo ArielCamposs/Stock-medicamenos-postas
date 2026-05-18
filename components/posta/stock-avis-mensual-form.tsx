@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 
 import {
   guardarDeclaracionStockAvisMensualAction,
   type PostaActionState,
 } from "@/app/actions/posta";
+import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,11 +51,17 @@ export function StockAvisMensualForm({
   puedeRegistrar: boolean;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const bound = guardarDeclaracionStockAvisMensualAction.bind(null, postaId);
   const [state, formAction, pending] = useActionState(
     bound as (s: PostaActionState, fd: FormData) => Promise<PostaActionState>,
     {}
   );
+
+  useEffect(() => {
+    if (state.success) toast(state.success, "success");
+    if (state.error) toast(state.error, "error");
+  }, [state.success, state.error, toast]);
 
   const [busqueda, setBusqueda] = useState("");
   const query = useMemo(() => normalizaBusqueda(busqueda), [busqueda]);

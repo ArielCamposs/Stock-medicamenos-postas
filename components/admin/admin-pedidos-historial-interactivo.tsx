@@ -7,6 +7,7 @@ import { useCallback, useState } from "react";
 
 import { AprobarPedidoButton } from "@/components/admin/aprobar-pedido-button";
 import { PedidoBandejaListoButton } from "@/components/admin/pedido-bandeja-listo-button";
+import { PedidoEstadoBadge } from "@/components/posta/pedido-estado-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { buildPedidosHistorialAdminXlsxBuffer } from "@/lib/reportes/pedidos-historial-admin-xlsx";
 import { cn } from "@/lib/utils";
@@ -145,13 +146,14 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
                   ) : null}
                 </td>
                 <td className="px-3 py-3 align-middle capitalize">{r.mesTitulo}</td>
-                <td
-                  className={cn(
-                    "px-3 py-3 align-middle text-xs",
-                    r.bandejaListo ? "font-mono" : "font-medium text-foreground"
+                <td className="px-3 py-3 align-middle">
+                  {r.bandejaListo ? (
+                    <PedidoEstadoBadge estado={r.estado} />
+                  ) : (
+                    <span className="inline-flex h-5 items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 text-[11px] font-medium uppercase tracking-wide text-amber-950 dark:text-amber-100">
+                      Pendiente
+                    </span>
                   )}
-                >
-                  {etiquetaEstadoAdmin(r)}
                 </td>
                 <td className="px-3 py-3 align-middle text-muted-foreground">{r.enviadoEtiqueta}</td>
                 <td className="px-3 py-3 align-middle text-right" onClick={(e) => e.stopPropagation()}>

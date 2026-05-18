@@ -1,11 +1,10 @@
-import Link from "next/link";
-
+import { PostaMesToolbar, tituloMesChile } from "@/components/posta/posta-mes-toolbar";
+import { PostaPageHeader } from "@/components/posta/posta-page-header";
 import { PedidoVolverMenuButton } from "@/components/posta/pedido-volver-menu-button";
 import {
   PedidoMensualPanel,
   type PedidoMensualLineaCliente,
 } from "@/components/posta/pedido-mensual-panel";
-import { buttonVariants } from "@/components/ui/button";
 import {
   puedeGestionarPedidoMensualPosta,
   requirePerfilUsuario,
@@ -14,8 +13,6 @@ import {
 import { cantidadPedidoSegunStockReferencial } from "@/lib/domain/pedido-mensual";
 import {
   anioMesActual,
-  mesAnterior,
-  mesSiguiente,
   etiquetaInstanteChile24h,
 } from "@/lib/domain/fecha-mes";
 import {
@@ -25,8 +22,6 @@ import {
 import { snapshotLedgerMesPosta } from "@/lib/posta/snapshot-ledger-mes-posta";
 import { obtenerCierreMensualPosta } from "@/lib/posta/cierre-mensual";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { cn } from "@/lib/utils";
-
 export const dynamic = "force-dynamic";
 
 type PageProps = {
@@ -55,26 +50,8 @@ function toInt(v: unknown): number {
   return 0;
 }
 
-function tituloMes(anio: number, mes: number) {
-  return new Date(anio, mes - 1, 1).toLocaleDateString("es-CL", {
-    month: "long",
-    year: "numeric",
-  });
-}
-
 function ymParam(anio: number, mes: number) {
   return `${anio}-${String(mes).padStart(2, "0")}`;
-}
-
-function hrefPedidosMes(
-  postaId: string,
-  anio: number,
-  mes: number,
-  conservarOrigenAdmin: boolean
-) {
-  const q = new URLSearchParams({ ym: ymParam(anio, mes) });
-  if (conservarOrigenAdmin) q.set("from", "admin");
-  return `/postas/${postaId}/pedidos?${q.toString()}`;
 }
 
 export default async function PostaPedidosPage({ params, searchParams }: PageProps) {
@@ -249,8 +226,8 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
     };
   });
 
-  const prev = mesAnterior(anio, mes);
-  const next = mesSiguiente(anio, mes);
+  const basePath = `/postas/${postaId}/pedidos`;
+  const queryExtra = volverBandejaAdmin ? { from: "admin" } : undefined;
 
   return (
     <div className="space-y-6">
@@ -260,55 +237,50 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight capitalize">
-            Pedido · {tituloMes(anio, mes)}
-          </h1>
-          {postaNombreCabecera ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{postaNombreCabecera}</span>
-              {postaCodigoCabecera ? (
-                <span className="ml-1.5 text-muted-foreground">· código {postaCodigoCabecera}</span>
-              ) : null}
-              <span className="mt-1 block text-xs font-normal text-muted-foreground/90">
-                Un pedido por posta y por mes; lo que ves acá corresponde solo a esta posta.
+      <PostaPageHeader
+        title={`Pedido · ${tituloMesChile(anio, mes)}`}
+        description={
+          <>
+            {postaNombreCabecera ? (
+              <>
+                <span className="font-medium text-foreground">{postaNombreCabecera}</span>
+                {postaCodigoCabecera ? (
+                  <span className="ml-1.5">· código {postaCodigoCabecera}</span>
+                ) : null}
+                <span className="mt-1 block">
+                  Un pedido por posta y por mes; lo que ves acá corresponde solo a esta posta.
+                </span>
+              </>
+            ) : (
+              "Un pedido por posta y por mes."
+            )}
+            {volverBandejaAdmin ? (
+              <span className="mt-2 block rounded-md border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-950 dark:text-sky-50">
+                Vista desde supervisión: este formulario es el pedido mensual de la posta indicada arriba,
+                no un pedido global.
               </span>
-            </p>
-          ) : null}
-          {volverBandejaAdmin ? (
-            <p className="mt-2 max-w-xl rounded-md border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-950 dark:text-sky-50">
-              Vista desde supervisión: este formulario es el pedido mensual de la posta indicada arriba, no
-              un pedido global.
-            </p>
-          ) : null}
-          {pedidoErr ? (
-            <p className="mt-2 text-sm text-destructive" role="alert">
-              No se pudo cargar el pedido: {pedidoErr.message}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={hrefPedidosMes(postaId, prev.anio, prev.mes, volverBandejaAdmin)}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8")}
-          >
-            ← Mes anterior
-          </Link>
-          <Link
-            href={hrefPedidosMes(postaId, next.anio, next.mes, volverBandejaAdmin)}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8")}
-          >
-            Mes siguiente →
-          </Link>
-        </div>
-      </div>
+            ) : null}
+            {pedidoErr ? (
+              <span className="mt-2 block text-destructive" role="alert">
+                No se pudo cargar el pedido: {pedidoErr.message}
+              </span>
+            ) : null}
+          </>
+        }
+      />
+
+      <PostaMesToolbar
+        basePath={basePath}
+        anio={anio}
+        mes={mes}
+        queryExtra={queryExtra}
+      />
 
       <PedidoMensualPanel
         postaId={postaId}
         anio={anio}
         mes={mes}
-        mesTitulo={tituloMes(anio, mes)}
+        mesTitulo={tituloMesChile(anio, mes)}
         postaNombre={postaNombreCabecera}
         postaCodigo={postaCodigoCabecera}
         ymQuery={ymQuery}

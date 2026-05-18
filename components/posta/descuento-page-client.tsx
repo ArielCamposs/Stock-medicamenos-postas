@@ -17,6 +17,7 @@ import {
   loadDescuentoSnapshot,
   saveDescuentoSnapshot,
 } from "@/lib/offline/descuento-snapshot";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 
 export type DescuentoPageClientProps = {
@@ -104,9 +105,11 @@ export function DescuentoPageClient(props: DescuentoPageClientProps) {
 
   if (!ready) {
     return (
-      <p className="text-sm text-muted-foreground" role="status">
-        Cargando descuento…
-      </p>
+      <div className="space-y-6" role="status" aria-busy="true" aria-label="Cargando descuento">
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
     );
   }
 
@@ -151,18 +154,19 @@ export function DescuentoPageClient(props: DescuentoPageClientProps) {
         </p>
       ) : null}
 
-      <div>
+      <header className="space-y-1">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Descuento diario</h1>
-      </div>
+        <p className="text-sm text-muted-foreground capitalize">
+          {new Date(anio, mes - 1, 1).toLocaleDateString("es-CL", {
+            month: "long",
+            year: "numeric",
+          })}
+        </p>
+      </header>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold sm:text-xl md:text-2xl">
-            Descuento por mes ·{" "}
-            <span className="tabular-nums">
-              {String(mes).padStart(2, "0")}/{anio}
-            </span>
-          </CardTitle>
+        <CardHeader className="border-b bg-muted/30">
+          <CardTitle className="text-base font-semibold">Calendario de descuentos</CardTitle>
         </CardHeader>
         <CardContent>
           <ConsumoMensualPanel

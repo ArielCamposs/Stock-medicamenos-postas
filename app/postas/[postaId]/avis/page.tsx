@@ -1,3 +1,5 @@
+import { PostaMesToolbar, tituloMesChile } from "@/components/posta/posta-mes-toolbar";
+import { PostaPageHeader } from "@/components/posta/posta-page-header";
 import {
   StockAvisMensualForm,
   type StockAvisMedRow,
@@ -106,36 +108,37 @@ export default async function PostaStockAvisPage({ params, searchParams }: PageP
     }
   }
 
-  const tituloMes = new Date(anio, mes - 1, 1).toLocaleDateString("es-CL", {
-    month: "long",
-    year: "numeric",
-  });
+  const basePath = `/postas/${postaId}/avis`;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Stock declarado en AVIS
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Declaración mensual por medicamento.
-          {cierre ? (
-            <span className="block pt-1 text-muted-foreground">
-              Mes cerrado. Solicita reapertura antes de modificar AVIS.
-            </span>
-          ) : !puedeRegistrar ? (
-            <span className="block pt-1 text-muted-foreground">
-              En esta sesión no tiene permiso para guardar cambios.
-            </span>
-          ) : null}
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PostaPageHeader
+        title="Stock declarado en AVIS"
+        description={
+          <>
+            Declaración mensual por medicamento.
+            {cierre ? (
+              <span className="block pt-1">
+                Mes cerrado. Solicita reapertura antes de modificar AVIS.
+              </span>
+            ) : !puedeRegistrar ? (
+              <span className="block pt-1">
+                En esta sesión no tienes permiso para guardar cambios.
+              </span>
+            ) : null}
+          </>
+        }
+      />
+
+      <PostaMesToolbar basePath={basePath} anio={anio} mes={mes} />
+
+      <p className="text-center font-heading text-lg font-semibold capitalize text-foreground">
+        {tituloMesChile(anio, mes)}
+      </p>
 
       <Card>
         <CardHeader>
-          <CardTitle className="capitalize">
-            Declaración mensual · {tituloMes}
-          </CardTitle>
+          <CardTitle>Declaración del mes</CardTitle>
         </CardHeader>
         <CardContent>
           <StockAvisMensualForm

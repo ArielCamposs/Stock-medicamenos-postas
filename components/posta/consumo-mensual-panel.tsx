@@ -1,14 +1,14 @@
 "use client";
 
-import Link from "next/link";
+import { Package } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { ConsumoDiaModal } from "@/components/posta/consumo-dia-modal";
 import { DescuentoOfflineBar } from "@/components/posta/descuento-offline-bar";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { StockNivelLeyenda } from "@/components/posta/stock-nivel-leyenda";
+import { PostaMesToolbar, tituloMesChile } from "@/components/posta/posta-mes-toolbar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { mesAnterior, mesSiguiente } from "@/lib/domain/fecha-mes";
 import {
   etiquetaMedicamentoCategoria,
   MEDICAMENTO_CATEGORIAS,
@@ -67,17 +67,6 @@ export type ConsumoMensualMedPayload = {
   disponible: number;
   dias: ConsumoDiaCelda[];
 };
-
-function ymParam(anio: number, mes: number) {
-  return `${anio}-${String(mes).padStart(2, "0")}`;
-}
-
-function tituloMes(anio: number, mes: number) {
-  return new Date(anio, mes - 1, 1).toLocaleDateString("es-CL", {
-    month: "long",
-    year: "numeric",
-  });
-}
 
 type CeldaAbierta = {
   med: ConsumoMensualMedPayload;
@@ -161,7 +150,7 @@ function MedicamentoMesCard({
                 aria-label={tituloCelda}
                 onClick={() => onOpen({ med, celda: d })}
                 className={cn(
-                  "relative flex min-h-[3.25rem] w-[2.85rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 py-1 text-[10px] transition-colors",
+                  "relative flex min-h-11 min-w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-1 py-1.5 text-[11px] transition-colors sm:min-h-[3.25rem] sm:min-w-[2.85rem] sm:text-[10px]",
                   d.syncPendiente && "ring-2 ring-amber-500 ring-offset-1",
                   d.syncError && "ring-2 ring-destructive ring-offset-1",
                   alerta === "critico" &&
@@ -285,10 +274,6 @@ export function ConsumoMensualPanel({
       cancelled = true;
     };
   }, [medicamentos, postaId, anio, mes, offlineRefresh]);
-  const prev = mesAnterior(anio, mes);
-  const next = mesSiguiente(anio, mes);
-  const ymActual = ymParam(anio, mes);
-
   const query = useMemo(() => normalizaBusqueda(busqueda), [busqueda]);
 
   const medicamentosFiltrados = useMemo(
@@ -311,50 +296,13 @@ export function ConsumoMensualPanel({
       {puedeRegistrar ? (
         <DescuentoOfflineBar postaId={postaId} refreshToken={offlineRefresh} />
       ) : null}
-      <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/15 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-        <form method="get" action={basePath} className="flex flex-wrap items-end gap-2">
-          <div className="space-y-1.5">
-            <label htmlFor="descuento-ym" className="text-xs font-medium text-foreground">
-              Mes a trabajar
-            </label>
-            <input
-              id="descuento-ym"
-              name="ym"
-              type="month"
-              min="2020-01"
-              max="2100-12"
-              defaultValue={ymActual}
-              className={cn(
-                "flex h-8 rounded-lg border border-input bg-transparent px-2 py-1 text-sm outline-none",
-                "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-              )}
-            />
-          </div>
-          <Button type="submit" variant="outline" size="sm">
-            Ver mes
-          </Button>
-        </form>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`${basePath}?ym=${ymParam(prev.anio, prev.mes)}`}
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-          >
-            ← Mes anterior
-          </Link>
-          <Link
-            href={`${basePath}?ym=${ymParam(next.anio, next.mes)}`}
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-          >
-            Mes siguiente →
-          </Link>
-        </div>
-      </div>
+      <PostaMesToolbar basePath={basePath} anio={anio} mes={mes} />
 
       <p
         className="text-center font-heading text-lg font-semibold capitalize leading-tight tracking-tight text-foreground sm:text-xl md:text-2xl"
         aria-live="polite"
       >
-        {tituloMes(anio, mes)}
+        {tituloMesChile(anio, mes)}
       </p>
 
       {medicamentos.length > 0 ? (
@@ -383,7 +331,7 @@ export function ConsumoMensualPanel({
             Los 10 más descontados del mes
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Sugerencias según el total de los mas descontados.
+            Sugerencias según el total de los más descontados.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {topDescuentoMes.map(({ med, total }) => (
@@ -402,10 +350,15 @@ export function ConsumoMensualPanel({
         </div>
       ) : null}
 
+      <StockNivelLeyenda className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2" />
+
       {mergedMeds.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No hay medicamentos activos en el catálogo.
-        </p>
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-10 text-center">
+          <Package className="size-8 text-muted-foreground" aria-hidden />
+          <p className="text-sm text-muted-foreground">
+            No hay medicamentos activos en el catálogo.
+          </p>
+        </div>
       ) : medicamentosFiltrados.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Sin resultados para la búsqueda.

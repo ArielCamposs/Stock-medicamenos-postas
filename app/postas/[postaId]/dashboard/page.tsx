@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Fragment } from "react";
 
+import { StockNivelLeyenda } from "@/components/posta/stock-nivel-leyenda";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -257,7 +258,7 @@ export default async function PostaDashboardPage({ params }: PageProps) {
     <div className="space-y-8">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Stock y resumen
+          Resumen del mes
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           {puedeRegistrarDescuentos ? (
@@ -309,29 +310,7 @@ export default async function PostaDashboardPage({ params }: PageProps) {
             <span className="block">
               <strong>Si no existen registros, se muestra "-", "0".{" "}</strong>
             </span>
-            <span className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-              <span className="inline-flex items-center gap-2">
-                <span
-                  className="size-3 shrink-0 rounded-sm bg-destructive/30 ring-1 ring-destructive/50"
-                  aria-hidden
-                />
-                Crítico
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span
-                  className="size-3 shrink-0 rounded-sm bg-amber-400/45 ring-1 ring-amber-600/40"
-                  aria-hidden
-                />
-                Regular
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span
-                  className="size-3 shrink-0 rounded-sm bg-emerald-500/40 ring-1 ring-emerald-600/45"
-                  aria-hidden
-                />
-                Bien
-              </span>
-            </span>
+            <StockNivelLeyenda className="mt-3" compact />
           </CardDescription>
         </CardHeader>
         <div className="px-4 pb-4">

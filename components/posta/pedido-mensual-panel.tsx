@@ -23,6 +23,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useToast } from "@/components/providers/toast-provider";
+import { PedidoEstadoBadge } from "@/components/posta/pedido-estado-badge";
+import { StockNivelLeyenda } from "@/components/posta/stock-nivel-leyenda";
 import {
   etiquetaMedicamentoCategoria,
   MEDICAMENTO_CATEGORIAS,
@@ -98,6 +101,81 @@ function armarResumenEnvio(lineas: LineaResumenEnvio[]) {
   return { conPedido, totalUnidades, nMedicamentos: conPedido.length };
 }
 
+function clasesFilaStock(
+  disponible: number,
+  stock_critico: number,
+  stock_recomendado: number
+) {
+  const tono = nivelStockListadoVisual(disponible, stock_critico, stock_recomendado);
+  return {
+    filaClass:
+      tono === "alerta"
+        ? "bg-destructive/10 dark:bg-destructive/15 border-l-4 border-l-destructive"
+        : tono === "regular"
+          ? "bg-amber-400/14 dark:bg-amber-500/12 border-l-4 border-l-amber-500"
+          : "bg-emerald-500/10 dark:bg-emerald-500/10 border-l-4 border-l-emerald-500",
+    claseDisponible:
+      tono === "alerta"
+        ? "text-destructive"
+        : tono === "regular"
+          ? "text-amber-950 dark:text-amber-100"
+          : "text-emerald-900 dark:text-emerald-100",
+  };
+}
+
+function PedidoLineaMobileCard({
+  m,
+  soloLectura,
+}: {
+  m: PedidoMensualLineaCliente;
+  soloLectura: boolean;
+}) {
+  const { filaClass, claseDisponible } = clasesFilaStock(
+    m.disponible,
+    m.stock_critico,
+    m.stock_recomendado
+  );
+  return (
+    <div className={cn("rounded-lg border border-border p-3", filaClass)}>
+      <p className="font-medium leading-snug">{m.nombre}</p>
+      <p className="font-mono text-[11px] text-muted-foreground">{m.codigo_interno}</p>
+      <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <dt className="text-muted-foreground">Disponible</dt>
+          <dd className={cn("font-semibold tabular-nums", claseDisponible)}>{m.disponible}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Sugerida</dt>
+          <dd className="font-semibold tabular-nums">{m.cantidad_sugerida}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Stock ref.</dt>
+          <dd className="tabular-nums">{m.stock_recomendado}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Crítico</dt>
+          <dd className="tabular-nums">{m.stock_critico}</dd>
+        </div>
+      </dl>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground">Pedido</span>
+        {soloLectura ? (
+          <span className="text-lg font-semibold tabular-nums">{m.cantidad_final}</span>
+        ) : (
+          <input
+            name={`final_${m.medicamentoId}`}
+            type="number"
+            min={0}
+            step={1}
+            defaultValue={m.cantidad_final}
+            className="h-9 w-24 rounded-md border border-input bg-background px-2 text-right text-sm font-semibold tabular-nums outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PedidoMensualPanel({
   postaId,
   anio,
@@ -123,6 +201,7 @@ export function PedidoMensualPanel({
   } | null>(null);
 
   const bound = pedidoMensualSubmitAction.bind(null, postaId);
+  const { toast } = useToast();
   const [state, formAction, pending] = useActionState(
     bound as (s: PedidoMensualActionState, fd: FormData) => Promise<PedidoMensualActionState>,
     {}
@@ -134,6 +213,11 @@ export function PedidoMensualPanel({
       router.refresh();
     }
   }, [state.ok, router]);
+
+  useEffect(() => {
+    if (state.success) toast(state.success, "success");
+    if (state.error) toast(state.error, "error");
+  }, [state.success, state.error, toast]);
 
   const soloLectura =
     !puedeEditar ||
@@ -171,14 +255,23 @@ export function PedidoMensualPanel({
             <span className="font-mono text-xs">max(0, stock ref. − disponible)</span>. Ajusta la columna{" "}
             <strong className="text-foreground">Pedido</strong> y envía a administración cuando esté listo.
           </p>
-          {estado ? (
-            <p className="mt-2 text-xs font-mono text-muted-foreground">
-              Estado: {estado}
-              {enviadoEtiqueta ? ` · Enviado: ${enviadoEtiqueta}` : null}
-            </p>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">Todavía no hay pedido registrado para este mes.</p>
-          )}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {estado ? (
+              <>
+                <PedidoEstadoBadge estado={estado} />
+                {enviadoEtiqueta ? (
+                  <span className="text-xs text-muted-foreground">
+                    Enviado: {enviadoEtiqueta}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Todavía no hay pedido registrado para este mes.
+              </span>
+            )}
+          </div>
+          <StockNivelLeyenda className="mt-3" compact />
         </CardHeader>
         <CardContent className="pt-4">
           {state.error ? (
@@ -210,11 +303,36 @@ export function PedidoMensualPanel({
                 value={JSON.stringify(lineas.map((l) => l.medicamentoId))}
               />
 
-              <div className="overflow-x-auto rounded-lg border border-border">
+              <div className="space-y-4 lg:hidden">
+                {MEDICAMENTO_CATEGORIAS.map((cat) => {
+                  const lineasCat = lineas.filter((l) => l.categoria === cat);
+                  if (lineasCat.length === 0) return null;
+                  return (
+                    <section key={`m-${cat}`} className="space-y-2">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {etiquetaMedicamentoCategoria[cat]}
+                      </h3>
+                      <div className="space-y-2">
+                        {lineasCat.map((m) => (
+                          <PedidoLineaMobileCard
+                            key={m.medicamentoId}
+                            m={m}
+                            soloLectura={soloLectura}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+
+              <div className="hidden overflow-x-auto rounded-lg border border-border lg:block">
                 <table className="w-full min-w-[52rem] border-collapse text-sm">
                   <thead>
                     <tr className="border-b bg-muted/80 text-left text-xs font-medium text-muted-foreground">
-                      <th className="px-2 py-2">Medicamento</th>
+                      <th className="sticky left-0 z-10 min-w-[10rem] bg-muted/95 px-2 py-2 backdrop-blur">
+                        Medicamento
+                      </th>
                       <th className="px-2 py-2">Unidad</th>
                       <th className="px-2 py-2 text-right">Stock ref.</th>
                       <th className="px-2 py-2 text-right">Crítico</th>
@@ -239,23 +357,11 @@ export function PedidoMensualPanel({
                               </td>
                             </tr>
                             {lineasCat.map((m) => {
-                              const tono = nivelStockListadoVisual(
+                              const { filaClass, claseDisponible } = clasesFilaStock(
                                 m.disponible,
                                 m.stock_critico,
                                 m.stock_recomendado
                               );
-                              const filaClass =
-                                tono === "alerta"
-                                  ? "bg-destructive/10 dark:bg-destructive/15"
-                                  : tono === "regular"
-                                    ? "bg-amber-400/14 dark:bg-amber-500/12"
-                                    : "bg-emerald-500/10 dark:bg-emerald-500/10";
-                              const claseDisponible =
-                                tono === "alerta"
-                                  ? "text-destructive"
-                                  : tono === "regular"
-                                    ? "text-amber-950 dark:text-amber-100"
-                                    : "text-emerald-900 dark:text-emerald-100";
                               return (
                                 <tr
                                   key={m.medicamentoId}
@@ -264,7 +370,7 @@ export function PedidoMensualPanel({
                                     filaClass
                                   )}
                                 >
-                                  <td className="px-2 py-1.5 align-middle">
+                                  <td className="sticky left-0 z-[1] min-w-[10rem] bg-inherit px-2 py-1.5 align-middle shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                                     <div className="flex min-w-0 flex-col gap-0.5">
                                       <span className="font-medium leading-snug">
                                         {m.nombre}

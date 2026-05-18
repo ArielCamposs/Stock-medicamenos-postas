@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 
+import { useToast } from "@/components/providers/toast-provider";
 import { registrarIngresosStockLoteAction } from "@/app/actions/posta";
 import type { PostaActionState } from "@/app/actions/posta";
 import { Button } from "@/components/ui/button";
@@ -57,11 +58,17 @@ export function IngresoStockLoteForm({
   ledgerPorMedicamento: Record<string, LedgerIngresoFila>;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const bound = registrarIngresosStockLoteAction.bind(null, postaId);
   const [state, formAction, pending] = useActionState(
     bound as (s: PostaActionState, fd: FormData) => Promise<PostaActionState>,
     {}
   );
+
+  useEffect(() => {
+    if (state.success) toast(state.success, "success");
+    if (state.error) toast(state.error, "error");
+  }, [state.success, state.error, toast]);
 
   const fechaApunte = useMemo(() => {
     const f = fechaIngresoParaMesMovimiento(mesContableYm, new Date());

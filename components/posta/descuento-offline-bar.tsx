@@ -4,6 +4,7 @@ import { CloudUpload, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { getErrorMovements, getPendingMovements } from "@/lib/offline/db";
 import { syncPendingMovements } from "@/lib/offline/sync";
@@ -20,6 +21,7 @@ export function DescuentoOfflineBar({
   refreshToken = 0,
 }: DescuentoOfflineBarProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const online = useOnlineStatus();
   const wasOfflineRef = useRef(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -48,22 +50,28 @@ export function DescuentoOfflineBar({
       const result = await syncPendingMovements(postaId);
       await reloadCounts();
       if (result.total === 0) {
-        setFlash("No hay descuentos pendientes.");
+        const msg = "No hay descuentos pendientes.";
+        setFlash(msg);
+        toast(msg);
       } else if (result.ok) {
-        setFlash(`Sincronizados ${result.synced} descuento(s).`);
+        const msg = `Sincronizados ${result.synced} descuento(s).`;
+        setFlash(msg);
+        toast(msg, "success");
         router.refresh();
       } else if (result.failed > 0) {
-        setFlash(
-          `Sincronizados ${result.synced}; ${result.failed} con error. Revisa los marcados en rojo.`
-        );
+        const msg = `Sincronizados ${result.synced}; ${result.failed} con error. Revisa los marcados en rojo.`;
+        setFlash(msg);
+        toast(msg, "error");
         router.refresh();
       } else {
-        setFlash("Sin conexión. Los pendientes se enviarán cuando vuelva internet.");
+        const msg = "Sin conexión. Los pendientes se enviarán cuando vuelva internet.";
+        setFlash(msg);
+        toast(msg, "error");
       }
     } finally {
       setSyncing(false);
     }
-  }, [online, syncing, postaId, reloadCounts, router]);
+  }, [online, syncing, postaId, reloadCounts, router, toast]);
 
   useEffect(() => {
     if (!online) {

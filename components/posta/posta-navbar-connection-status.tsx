@@ -11,13 +11,14 @@ export function PostaNavbarConnectionStatus() {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1.5 text-xs font-medium",
+        "inline-flex items-center gap-1 text-xs font-medium",
         online
           ? "text-emerald-700 dark:text-emerald-400"
           : "text-amber-800 dark:text-amber-300"
       )}
       role="status"
       aria-live="polite"
+      title={online ? "En línea" : "Sin conexión"}
     >
       {online ? (
         <>
@@ -27,16 +28,16 @@ export function PostaNavbarConnectionStatus() {
               aria-hidden
             />
             <Wifi
-              className="relative size-3.5 text-emerald-600 motion-safe:animate-[wifi-signal_2s_ease-in-out_infinite] dark:text-emerald-400"
+              className="relative size-3.5 motion-safe:animate-[wifi-signal_2s_ease-in-out_infinite]"
               aria-hidden
             />
           </span>
-          <span>En línea</span>
+          <span className="hidden sm:inline">En línea</span>
         </>
       ) : (
         <>
           <CloudOff className="size-3.5 shrink-0" aria-hidden />
-          <span>Sin conexión</span>
+          <span className="hidden sm:inline">Sin conexión</span>
         </>
       )}
     </div>
