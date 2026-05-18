@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { signOutAction } from "@/app/actions/auth";
+import { PostaNavbarConnectionStatus } from "@/components/posta/posta-navbar-connection-status";
+import { PostaPerfilOfflineSync } from "@/components/posta/posta-perfil-offline-sync";
 import { PostaSubnav } from "@/components/posta/posta-subnav";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,13 +46,17 @@ export default async function PostaLayout({ children, params }: Props) {
 
   return (
     <div className="flex min-h-full flex-col">
+      <PostaPerfilOfflineSync profile={profile} />
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3">
           <div className="flex flex-wrap items-center gap-4 sm:justify-between">
             <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium">
-              <Link className="text-foreground" href={`/postas/${postaId}/dashboard`}>
-                {tituloPosta}
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link className="text-foreground" href={`/postas/${postaId}/dashboard`}>
+                  {tituloPosta}
+                </Link>
+                <PostaNavbarConnectionStatus />
+              </div>
               {enlaceAdmin ? (
                 <Link
                   className="text-muted-foreground hover:text-foreground"

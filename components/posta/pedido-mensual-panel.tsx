@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, type FormEvent, useActionState, useEffect } from "react";
+import { Fragment, useActionState, useEffect, useRef, useState } from "react";
 
 import {
   pedidoMensualSubmitAction,
@@ -15,6 +15,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   etiquetaMedicamentoCategoria,
   MEDICAMENTO_CATEGORIAS,
@@ -36,10 +44,15 @@ export type PedidoMensualLineaCliente = {
   cantidad_final: number;
 };
 
+type LineaResumenEnvio = PedidoMensualLineaCliente & { cantidadPedido: number };
+
 type Props = {
   postaId: string;
   anio: number;
   mes: number;
+  mesTitulo: string;
+  postaNombre: string | null;
+  postaCodigo: string | null;
   ymQuery: string;
   pedidoId: string | null;
   estado:
@@ -57,10 +70,41 @@ type Props = {
   lineas: PedidoMensualLineaCliente[];
 };
 
+function leerCantidadInput(raw: string | null, fallback: number): number {
+  const t = (raw ?? "").trim();
+  if (t === "") return fallback;
+  const n = Number.parseInt(t, 10);
+  if (Number.isNaN(n) || n < 0) return fallback;
+  return n;
+}
+
+function resumenDesdeFormulario(
+  form: HTMLFormElement,
+  lineas: PedidoMensualLineaCliente[]
+): LineaResumenEnvio[] {
+  const fd = new FormData(form);
+  return lineas.map((l) => ({
+    ...l,
+    cantidadPedido: leerCantidadInput(
+      fd.get(`final_${l.medicamentoId}`)?.toString() ?? null,
+      l.cantidad_final
+    ),
+  }));
+}
+
+function armarResumenEnvio(lineas: LineaResumenEnvio[]) {
+  const conPedido = lineas.filter((l) => l.cantidadPedido > 0);
+  const totalUnidades = conPedido.reduce((acc, l) => acc + l.cantidadPedido, 0);
+  return { conPedido, totalUnidades, nMedicamentos: conPedido.length };
+}
+
 export function PedidoMensualPanel({
   postaId,
   anio,
   mes,
+  mesTitulo,
+  postaNombre,
+  postaCodigo,
   ymQuery,
   pedidoId,
   estado,
@@ -69,6 +113,15 @@ export function PedidoMensualPanel({
   lineas,
 }: Props) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const submitEnviarRef = useRef<HTMLButtonElement>(null);
+  const [confirmarAbierto, setConfirmarAbierto] = useState(false);
+  const [resumenEnvio, setResumenEnvio] = useState<{
+    conPedido: LineaResumenEnvio[];
+    totalUnidades: number;
+    nMedicamentos: number;
+  } | null>(null);
+
   const bound = pedidoMensualSubmitAction.bind(null, postaId);
   const [state, formAction, pending] = useActionState(
     bound as (s: PedidoMensualActionState, fd: FormData) => Promise<PedidoMensualActionState>,
@@ -77,6 +130,7 @@ export function PedidoMensualPanel({
 
   useEffect(() => {
     if (state.ok) {
+      setConfirmarAbierto(false);
       router.refresh();
     }
   }, [state.ok, router]);
@@ -89,21 +143,22 @@ export function PedidoMensualPanel({
     estado === "DESPACHADO" ||
     estado === "RECIBIDO";
   const puedePdf = Boolean(pedidoId) && estado !== "BORRADOR" && estado !== null;
+  const esReenvioObservado = estado === "OBSERVADO";
 
-  function antesDeEnviarPedido(e: FormEvent<HTMLFormElement>) {
-    const submitter = (e.nativeEvent as SubmitEvent).submitter;
-    const intent =
-      submitter instanceof HTMLButtonElement &&
-      submitter.name === "_intent" &&
-      (submitter.value === "enviar" || submitter.value === "guardar")
-        ? submitter.value
-        : null;
-    if (intent !== "enviar") return;
-    const ok = window.confirm(
-      "¿Enviar el pedido a administración? Después no podrás editar las cantidades acá."
-    );
-    if (!ok) e.preventDefault();
+  function abrirConfirmacionEnvio() {
+    const form = formRef.current;
+    if (!form) return;
+    const lineasForm = resumenDesdeFormulario(form, lineas);
+    setResumenEnvio(armarResumenEnvio(lineasForm));
+    setConfirmarAbierto(true);
   }
+
+  function confirmarEnvio() {
+    submitEnviarRef.current?.click();
+  }
+
+  const resumen = resumenEnvio;
+  const pedidoVacio = resumen !== null && resumen.nMedicamentos === 0;
 
   return (
     <div className="space-y-4">
@@ -113,8 +168,8 @@ export function PedidoMensualPanel({
           <p className="mt-1 text-sm text-muted-foreground">
             El disponible viene del registro del mes. La columna{" "}
             <strong className="text-foreground">Sugerida</strong> es{" "}
-            <span className="font-mono text-xs">max(0, stock ref. − disponible)</span>. Puedes ajustar la columna{" "}
-            <strong className="text-foreground">Pedido</strong> y guardar borrador o enviar a administración.
+            <span className="font-mono text-xs">max(0, stock ref. − disponible)</span>. Ajusta la columna{" "}
+            <strong className="text-foreground">Pedido</strong> y envía a administración cuando esté listo.
           </p>
           {estado ? (
             <p className="mt-2 text-xs font-mono text-muted-foreground">
@@ -122,7 +177,7 @@ export function PedidoMensualPanel({
               {enviadoEtiqueta ? ` · Enviado: ${enviadoEtiqueta}` : null}
             </p>
           ) : (
-            <p className="mt-2 text-xs text-muted-foreground">Todavía no hay pedido guardado para este mes.</p>
+            <p className="mt-2 text-xs text-muted-foreground">Todavía no hay pedido registrado para este mes.</p>
           )}
         </CardHeader>
         <CardContent className="pt-4">
@@ -146,7 +201,7 @@ export function PedidoMensualPanel({
           {lineas.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay medicamentos activos en el catálogo.</p>
           ) : (
-            <form action={formAction} className="space-y-4" onSubmit={antesDeEnviarPedido}>
+            <form ref={formRef} action={formAction} className="space-y-4">
               <input type="hidden" name="anio" value={anio} />
               <input type="hidden" name="mes" value={mes} />
               <input
@@ -268,12 +323,24 @@ export function PedidoMensualPanel({
 
               {!soloLectura ? (
                 <div className="flex flex-wrap gap-3">
-                  <Button type="submit" name="_intent" value="guardar" variant="outline" disabled={pending}>
-                    {pending ? "Guardando…" : "Guardar borrador"}
-                  </Button>
-                  <Button type="submit" name="_intent" value="enviar" disabled={pending}>
+                  <Button
+                    type="button"
+                    disabled={pending}
+                    onClick={abrirConfirmacionEnvio}
+                  >
                     {pending ? "Enviando…" : "Confirmar y enviar"}
                   </Button>
+                  <button
+                    ref={submitEnviarRef}
+                    type="submit"
+                    name="_intent"
+                    value="enviar"
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden
+                  >
+                    Enviar
+                  </button>
                 </div>
               ) : puedePdf ? (
                 <div className="flex flex-wrap gap-3">
@@ -291,6 +358,94 @@ export function PedidoMensualPanel({
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={confirmarAbierto} onOpenChange={setConfirmarAbierto}>
+        <DialogContent className="sm:max-w-md" showCloseButton>
+          <DialogHeader>
+            <DialogTitle>
+              {esReenvioObservado ? "Reenviar pedido corregido" : "Enviar pedido a administración"}
+            </DialogTitle>
+            <DialogDescription>
+              Revisa el resumen del pedido antes de confirmar el envío.
+            </DialogDescription>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <div>
+                <span className="font-medium capitalize text-foreground">{mesTitulo}</span>
+                  {postaNombre ? (
+                    <>
+                      {" "}
+                      · <span className="text-foreground">{postaNombre}</span>
+                      {postaCodigo ? (
+                        <span className="font-mono text-xs"> ({postaCodigo})</span>
+                      ) : null}
+                    </>
+                  ) : null}
+              </div>
+              {resumen ? (
+                <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-foreground">
+                    {resumen.nMedicamentos === 0 ? (
+                      <>
+                        Todas las líneas quedan en <strong>0</strong>. ¿Quieres enviar igual un pedido sin
+                        cantidades?
+                      </>
+                    ) : (
+                      <>
+                        Vas a pedir{" "}
+                        <strong className="tabular-nums">
+                          {resumen.totalUnidades.toLocaleString("es-CL")}
+                        </strong>{" "}
+                        unidades en{" "}
+                        <strong className="tabular-nums">{resumen.nMedicamentos}</strong>{" "}
+                        {resumen.nMedicamentos === 1 ? "medicamento" : "medicamentos"}.
+                      </>
+                    )}
+                </div>
+              ) : null}
+                {resumen && resumen.conPedido.length > 0 ? (
+                  <div className="max-h-48 overflow-y-auto rounded-md border border-border">
+                    <ul className="divide-y divide-border text-xs">
+                      {resumen.conPedido.map((l) => (
+                        <li
+                          key={l.medicamentoId}
+                          className="flex items-baseline justify-between gap-3 px-3 py-2"
+                        >
+                          <span className="min-w-0 truncate text-foreground">{l.nombre}</span>
+                          <span className="shrink-0 tabular-nums font-medium text-foreground">
+                            {l.cantidadPedido} {l.unidad_medida}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              <p className="text-xs">
+                {esReenvioObservado
+                  ? "Al reenviar, administración verá las cantidades actualizadas. No podrás editarlas acá hasta que vuelvan a observar el pedido."
+                  : "Después del envío no podrás cambiar las cantidades desde esta pantalla. Revisa bien antes de confirmar."}
+              </p>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="border-t-0 bg-transparent p-0 pt-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() => setConfirmarAbierto(false)}
+            >
+              Volver a revisar
+            </Button>
+            <Button type="button" disabled={pending} onClick={confirmarEnvio}>
+              {pending
+                ? "Enviando…"
+                : pedidoVacio
+                  ? "Enviar pedido vacío"
+                  : esReenvioObservado
+                    ? "Reenviar pedido"
+                    : "Enviar pedido"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-wrap gap-3">
         <Link

@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { isNetworkError } from "@/lib/auth/network-error";
+import { readPerfilOfflineCookie } from "@/lib/auth/perfil-offline-cookie.server";
 import type { PerfilUsuarioRow, RolUsuarioDb } from "@/lib/auth/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -67,14 +69,21 @@ export type SessionContext =
 export async function getSessionContext(): Promise<SessionContext> {
   const supabase = await createServerSupabaseClient();
 
-  await supabase.auth.getSession();
-
   const {
-    data: { user },
-    error,
+    data: { user: validatedUser },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (error || !user?.id) {
+  let user = validatedUser ?? null;
+
+  if (!user?.id && userError && isNetworkError(userError)) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    user = session?.user ?? null;
+  }
+
+  if (!user?.id) {
     return { user: null, profile: null };
   }
 
@@ -95,6 +104,12 @@ export async function getSessionContext(): Promise<SessionContext> {
   }
 
   if (!rawRow) {
+    if (rpcResult.error && isNetworkError(rpcResult.error)) {
+      const cached = await readPerfilOfflineCookie();
+      if (cached && cached.id === user.id && cached.activo) {
+        return { user, profile: cached };
+      }
+    }
     if (rpcResult.error && process.env.NODE_ENV === "development") {
       console.error(
         "[mi_perfil_app] ejecuta en Supabase los SQL de migración: fix_perfiles_rls_recursion + mi_perfil_app_rpc + perfiles_functions_disable_rls_inside:",

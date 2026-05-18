@@ -46,6 +46,13 @@ export function etiquetaMes(anio: number, mes: number) {
   return `${String(mes).padStart(2, "0")}/${anio}`;
 }
 
+/** Fecha calendario `YYYY-MM-DD` → `DD/MM/YYYY` para pantallas. */
+export function etiquetaFechaCalendarioDDMMYYYY(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return iso;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
 export function fechaInputHoy() {
   const d = new Date();
   const y = d.getFullYear();

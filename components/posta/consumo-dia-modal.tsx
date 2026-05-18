@@ -1,13 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, type FormEvent } from "react";
 
-import {
-  eliminarConsumoDiaAction,
-  registrarConsumoDiarioCeldaAction,
-} from "@/app/actions/posta";
+import { eliminarConsumoDiaAction } from "@/app/actions/posta";
 import type { PostaActionState } from "@/app/actions/posta";
+import { addLocalMovement } from "@/lib/offline/db";
+import { trySyncSingleMovement } from "@/lib/offline/sync";
 import { nivelAlertaStock } from "@/lib/posta/admin-stock-alerta-postas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +43,8 @@ export type ConsumoDiaModalProps = {
   /** Umbral de referencia del mes (misma lógica que el resto del sistema para «cerca»). */
   stockRecomendado?: number;
   onClose: () => void;
+  /** Se llama tras guardar en IndexedDB (sync OK o pendiente). */
+  onLocalSaved?: () => void;
 };
 
 export function ConsumoDiaModal({
@@ -63,13 +64,12 @@ export function ConsumoDiaModal({
   stockCritico,
   stockRecomendado = 0,
   onClose,
+  onLocalSaved,
 }: ConsumoDiaModalProps) {
   const router = useRouter();
-  const boundGuardar = registrarConsumoDiarioCeldaAction.bind(null, postaId);
-  const [state, formAction, pending] = useActionState(
-    boundGuardar as (s: PostaActionState, fd: FormData) => Promise<PostaActionState>,
-    {}
-  );
+  const [saveInfo, setSaveInfo] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const boundEliminar = eliminarConsumoDiaAction.bind(null, postaId);
   const [delState, delAction, delPending] = useActionState(
@@ -79,13 +79,6 @@ export function ConsumoDiaModal({
 
   const [con, setCon] = useState(String(initialCon));
   const [sin, setSin] = useState(String(initialSin));
-
-  useEffect(() => {
-    if (state.ok) {
-      router.refresh();
-      onClose();
-    }
-  }, [state.ok, onClose, router]);
 
   useEffect(() => {
     if (delState.ok) {
@@ -122,6 +115,61 @@ export function ConsumoDiaModal({
 
   const hayRegistro = initialCon > 0 || initialSin > 0;
 
+  async function handleGuardar(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaveError(null);
+    setSaveInfo(null);
+
+    if (Number.isNaN(conN) || Number.isNaN(sinN) || conN < 0 || sinN < 0) {
+      setSaveError("Las cantidades deben ser números enteros mayores o iguales a 0.");
+      return;
+    }
+
+    const obsInput = new FormData(e.currentTarget).get("observacion");
+    const observacion =
+      typeof obsInput === "string" && obsInput.trim().length > 0
+        ? obsInput.trim().slice(0, 500)
+        : null;
+
+    setSaving(true);
+    try {
+      const idLocal = crypto.randomUUID();
+      const local = await addLocalMovement({
+        idLocal,
+        postaId,
+        medicamentoId,
+        fechaConsumo: fechaISO,
+        cantidadConAvis: conN,
+        cantidadSinAvis: sinN,
+        observacion,
+        estado: "pending",
+      });
+
+      const sync = await trySyncSingleMovement(postaId, local);
+
+      if (sync.ok) {
+        setSaveInfo("Descuento guardado y sincronizado.");
+        onLocalSaved?.();
+        router.refresh();
+        onClose();
+        return;
+      }
+
+      if (sync.offline) {
+        setSaveInfo("Guardado localmente. Pendiente de sincronización cuando haya internet.");
+        onLocalSaved?.();
+        onClose();
+        return;
+      }
+
+      setSaveError(sync.error ?? "No se pudo sincronizar con el servidor.");
+    } catch {
+      setSaveError("No se pudo guardar en este dispositivo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
@@ -149,12 +197,20 @@ export function ConsumoDiaModal({
           <span className="font-mono">({medCodigo})</span> · {unidad}
         </p>
 
-        {state.error ? (
+        {saveError ? (
           <p
             className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
             role="alert"
           >
-            {state.error}
+            {saveError}
+          </p>
+        ) : null}
+        {saveInfo ? (
+          <p
+            className="mt-3 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-foreground"
+            role="status"
+          >
+            {saveInfo}
           </p>
         ) : null}
         {delState.error ? (
@@ -168,7 +224,7 @@ export function ConsumoDiaModal({
 
         {puedeRegistrar ? (
           <>
-            <form action={formAction} className="mt-4 grid gap-4">
+            <form onSubmit={(ev) => void handleGuardar(ev)} className="mt-4 grid gap-4">
               <input type="hidden" name="fecha" value={fechaISO} />
               <input type="hidden" name="medicamento_id" value={medicamentoId} />
               <div className="grid gap-4 sm:grid-cols-2">
@@ -251,8 +307,8 @@ export function ConsumoDiaModal({
                 <Button type="button" variant="outline" onClick={onClose}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={pending || delPending}>
-                  {pending ? "Guardando…" : "Guardar"}
+                <Button type="submit" disabled={saving || delPending}>
+                  {saving ? "Guardando…" : "Guardar"}
                 </Button>
               </div>
             </form>
@@ -275,7 +331,7 @@ export function ConsumoDiaModal({
                   type="submit"
                   variant="destructive"
                   className="w-full"
-                  disabled={pending || delPending}
+                  disabled={saving || delPending}
                 >
                   {delPending ? "Anulando…" : "Anular día"}
                 </Button>

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { esAdminGeneral, requirePerfilUsuario } from "@/lib/auth/session";
 import {
+  etiquetaFechaCalendarioDDMMYYYY,
   fechaCalendarioEnZonaIANA,
   ZONA_CALENDARIO_OPERACION,
 } from "@/lib/domain/fecha-mes";
@@ -28,6 +29,7 @@ export default async function AdminDashboardPage() {
   const puedeCatalogo = esAdminGeneral(profile);
 
   const hoy = fechaCalendarioEnZonaIANA(ZONA_CALENDARIO_OPERACION);
+  const hoyEtiqueta = etiquetaFechaCalendarioDDMMYYYY(hoy);
   const [anioStockStr, mesStockStr] = hoy.split("-");
   const anioStock = Number(anioStockStr);
   const mesStock = Number(mesStockStr);
@@ -157,10 +159,10 @@ export default async function AdminDashboardPage() {
           </div>
           <div className="rounded-lg border bg-background/80 px-4 py-3 text-center shadow-sm backdrop-blur-sm sm:text-right">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Fecha de trabajo
+              Fecha de hoy
             </p>
             <p className="font-mono text-lg font-semibold tabular-nums text-foreground">
-              {hoy}
+              {hoyEtiqueta}
             </p>
           </div>
         </div>
@@ -220,7 +222,8 @@ export default async function AdminDashboardPage() {
       <Card className="overflow-hidden border-2 shadow-md">
         <CardHeader className="border-b bg-muted/40">
           <CardTitle className="text-lg">
-            Seguimiento del día · <span className="font-mono font-normal">{hoy}</span>
+            Seguimiento del día ·{" "}
+            <span className="font-mono font-normal">{hoyEtiqueta}</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">

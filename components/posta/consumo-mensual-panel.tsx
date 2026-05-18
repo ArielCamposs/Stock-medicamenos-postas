@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ConsumoDiaModal } from "@/components/posta/consumo-dia-modal";
+import { DescuentoOfflineBar } from "@/components/posta/descuento-offline-bar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +14,8 @@ import {
   MEDICAMENTO_CATEGORIAS,
   type MedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
+import { getLocalMovementsByPostaMonth } from "@/lib/offline/db";
+import { mergePendingIntoMedicamentos } from "@/lib/offline/merge-pending-descuento";
 import { nivelAlertaStock } from "@/lib/posta/admin-stock-alerta-postas";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +45,9 @@ export type ConsumoDiaCelda = {
   total: number;
   /** Texto libre guardado con el descuento del día (si existe). */
   observacion: string | null;
+  syncPendiente?: boolean;
+  syncError?: boolean;
+  syncErrorMessage?: string;
 };
 
 export type ConsumoMensualMedPayload = {
@@ -155,7 +161,9 @@ function MedicamentoMesCard({
                 aria-label={tituloCelda}
                 onClick={() => onOpen({ med, celda: d })}
                 className={cn(
-                  "flex min-h-[3.25rem] w-[2.85rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 py-1 text-[10px] transition-colors",
+                  "relative flex min-h-[3.25rem] w-[2.85rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 py-1 text-[10px] transition-colors",
+                  d.syncPendiente && "ring-2 ring-amber-500 ring-offset-1",
+                  d.syncError && "ring-2 ring-destructive ring-offset-1",
                   alerta === "critico" &&
                   "border-destructive/60 bg-destructive/15 font-medium text-foreground dark:bg-destructive/20",
                   alerta === "cerca" &&
@@ -167,6 +175,15 @@ function MedicamentoMesCard({
                 )}
               >
                 <span className="leading-none opacity-80">{d.dia}</span>
+                {d.syncPendiente ? (
+                  <span className="absolute -right-0.5 -top-0.5 rounded bg-amber-500 px-0.5 text-[7px] font-bold text-white">
+                    P
+                  </span>
+                ) : d.syncError ? (
+                  <span className="absolute -right-0.5 -top-0.5 rounded bg-destructive px-0.5 text-[7px] font-bold text-white">
+                    !
+                  </span>
+                ) : null}
                 {tiene ? (
                   <>
                     <span className="text-xs font-semibold tabular-nums leading-none">
@@ -251,6 +268,23 @@ export function ConsumoMensualPanel({
 }) {
   const [abierta, setAbierta] = useState<CeldaAbierta | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const [offlineRefresh, setOfflineRefresh] = useState(0);
+  const [mergedMeds, setMergedMeds] =
+    useState<ConsumoMensualMedPayload[]>(medicamentos);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const local = await getLocalMovementsByPostaMonth(postaId, anio, mes);
+      if (!cancelled) {
+        setMergedMeds(mergePendingIntoMedicamentos(medicamentos, local));
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [medicamentos, postaId, anio, mes, offlineRefresh]);
   const prev = mesAnterior(anio, mes);
   const next = mesSiguiente(anio, mes);
   const ymActual = ymParam(anio, mes);
@@ -258,22 +292,25 @@ export function ConsumoMensualPanel({
   const query = useMemo(() => normalizaBusqueda(busqueda), [busqueda]);
 
   const medicamentosFiltrados = useMemo(
-    () => medicamentos.filter((m) => medCoincideBusqueda(m, query)),
-    [medicamentos, query]
+    () => mergedMeds.filter((m) => medCoincideBusqueda(m, query)),
+    [mergedMeds, query]
   );
 
   /** Top 5 por suma de descuentos del mes (con+sin AVIS por día). */
   const topDescuentoMes = useMemo(() => {
-    const conTotal = medicamentos.map((m) => ({
+    const conTotal = mergedMeds.map((m) => ({
       med: m,
       total: m.dias.reduce((acc, d) => acc + d.total, 0),
     }));
     conTotal.sort((a, b) => b.total - a.total);
     return conTotal.filter((x) => x.total > 0).slice(0, 10);
-  }, [medicamentos]);
+  }, [mergedMeds]);
 
   return (
     <div className="space-y-4">
+      {puedeRegistrar ? (
+        <DescuentoOfflineBar postaId={postaId} refreshToken={offlineRefresh} />
+      ) : null}
       <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/15 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <form method="get" action={basePath} className="flex flex-wrap items-end gap-2">
           <div className="space-y-1.5">
@@ -365,7 +402,7 @@ export function ConsumoMensualPanel({
         </div>
       ) : null}
 
-      {medicamentos.length === 0 ? (
+      {mergedMeds.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No hay medicamentos activos en el catálogo.
         </p>
@@ -413,6 +450,7 @@ export function ConsumoMensualPanel({
           disponibleMes={abierta.med.disponible}
           stockCritico={abierta.med.stock_critico}
           onClose={() => setAbierta(null)}
+          onLocalSaved={() => setOfflineRefresh((n) => n + 1)}
         />
       ) : null}
     </div>

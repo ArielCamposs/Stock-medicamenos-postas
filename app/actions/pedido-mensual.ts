@@ -183,7 +183,7 @@ async function upsertDetalleDesdeFormulario(
   return { ok: true, pedidoId: ped.pedidoId };
 }
 
-/** `_intent`: `guardar` | `enviar` */
+/** `_intent` debe ser `enviar`. */
 export async function pedidoMensualSubmitAction(
   postaId: string,
   prev: PedidoMensualActionState,
@@ -192,7 +192,11 @@ export async function pedidoMensualSubmitAction(
   const gate = await assertEncargadoPosta(postaId);
   if (!gate.ok) return { error: gate.error };
 
-  const intent = formData.get("_intent")?.toString() ?? "guardar";
+  const intent = formData.get("_intent")?.toString() ?? "";
+  if (intent !== "enviar") {
+    return { error: "Acción no reconocida." };
+  }
+
   const anio = Number(formData.get("anio"));
   const mes = Number(formData.get("mes"));
   if (!Number.isFinite(anio) || !Number.isFinite(mes) || mes < 1 || mes > 12) {
@@ -202,28 +206,6 @@ export async function pedidoMensualSubmitAction(
   const supabase = await createServerSupabaseClient();
   const up = await upsertDetalleDesdeFormulario(supabase, postaId, anio, mes, gate.userId, formData);
   if (!up.ok) return { error: up.error };
-
-  if (intent === "guardar") {
-    await supabase
-      .from("pedidos_mensuales")
-      .update({ estado: "BORRADOR" })
-      .eq("id", up.pedidoId)
-      .eq("estado", "OBSERVADO");
-    await registrarAuditLog(supabase, {
-      actorId: gate.userId,
-      action: "pedido_mensual.guardar_borrador",
-      entity: "pedidos_mensuales",
-      entityId: up.pedidoId,
-      metadata: { postaId, anio, mes },
-    });
-    revalidatePath(`/postas/${postaId}/pedidos`);
-    revalidatePath("/admin/pedidos");
-    return { ok: true, success: "Borrador guardado." };
-  }
-
-  if (intent !== "enviar") {
-    return { error: "Accion no reconocida." };
-  }
 
   const { data: updRows, error: stErr } = await supabase
     .from("pedidos_mensuales")

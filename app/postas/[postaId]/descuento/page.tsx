@@ -1,14 +1,6 @@
-import {
-  ConsumoMensualPanel,
-  type ConsumoMensualMedPayload,
-} from "@/components/posta/consumo-mensual-panel";
-import { UltimosConsumosTabla } from "@/components/posta/ultimos-consumos-tabla";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { DescuentoPageClient } from "@/components/posta/descuento-page-client";
+import type { ConsumoMensualMedPayload } from "@/components/posta/consumo-mensual-panel";
+import { isNetworkError } from "@/lib/auth/network-error";
 import {
   esAdminGeneral,
   puedeRegistrarOperacionesPosta,
@@ -75,11 +67,11 @@ export default async function PostaDescuentoPage({ params, searchParams }: PageP
   const basePath = `/postas/${postaId}/descuento`;
 
   const [
-    { data: medicamentos },
-    { data: curStock },
-    { data: movs },
-    { data: movimientos },
-    { data: avisRows },
+    medicamentosRes,
+    curStockRes,
+    movsRes,
+    movimientosRes,
+    avisRowsRes,
   ] = await Promise.all([
     supabase
       .from("medicamentos")
@@ -126,6 +118,31 @@ export default async function PostaDescuentoPage({ params, searchParams }: PageP
       .eq("anio", anio)
       .eq("mes", mes),
   ]);
+
+  const sinDatosPorRed =
+    medicamentosRes.error != null && isNetworkError(medicamentosRes.error);
+
+  if (sinDatosPorRed) {
+    return (
+      <DescuentoPageClient
+        postaId={postaId}
+        basePath={basePath}
+        anio={anio}
+        mes={mes}
+        puedeRegistrar={puedeRegistrar}
+        soloLecturaDescuentoVariante={soloLecturaDescuentoVariante}
+        medicamentos={[]}
+        ultimosRows={[]}
+        servidorSinRed
+      />
+    );
+  }
+
+  const { data: medicamentos } = medicamentosRes;
+  const { data: curStock } = curStockRes;
+  const { data: movs } = movsRes;
+  const { data: movimientos } = movimientosRes;
+  const { data: avisRows } = avisRowsRes;
 
   const avisPorMed = new Map<string, number>();
   if (avisRows && Array.isArray(avisRows)) {
@@ -300,47 +317,15 @@ export default async function PostaDescuentoPage({ params, searchParams }: PageP
     }) ?? [];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Descuento diario
-        </h1>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold sm:text-xl md:text-2xl">
-            Descuento por mes ·{" "}
-            <span className="tabular-nums">
-              {String(mes).padStart(2, "0")}/{anio}
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ConsumoMensualPanel
-            postaId={postaId}
-            basePath={basePath}
-            anio={anio}
-            mes={mes}
-            puedeRegistrar={puedeRegistrar}
-            soloLecturaDescuentoVariante={soloLecturaDescuentoVariante}
-            medicamentos={payload}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Últimos movimientos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <UltimosConsumosTabla
-            postaId={postaId}
-            puedeRegistrar={puedeRegistrar}
-            rows={rows}
-          />
-        </CardContent>
-      </Card>
-    </div>
+    <DescuentoPageClient
+      postaId={postaId}
+      basePath={basePath}
+      anio={anio}
+      mes={mes}
+      puedeRegistrar={puedeRegistrar}
+      soloLecturaDescuentoVariante={soloLecturaDescuentoVariante}
+      medicamentos={payload}
+      ultimosRows={rows}
+    />
   );
 }

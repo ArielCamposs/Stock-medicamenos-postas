@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 
+import { isNetworkError } from "@/lib/auth/network-error";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 
 export type MiddlewareSessionResult = {
@@ -42,8 +43,22 @@ export async function updateSession(request: NextRequest): Promise<MiddlewareSes
   });
 
   const {
-    data: { user },
+    data: { user: validatedUser },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  return { response: supabaseResponse, user };
+  if (validatedUser) {
+    return { response: supabaseResponse, user: validatedUser };
+  }
+
+  if (userError && isNetworkError(userError)) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.user) {
+      return { response: supabaseResponse, user: session.user };
+    }
+  }
+
+  return { response: supabaseResponse, user: null };
 }

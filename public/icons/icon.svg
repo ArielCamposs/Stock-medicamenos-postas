@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Inventario postas">
+  <rect width="512" height="512" rx="96" fill="#0f766e"/>
+  <path fill="#fff" d="M256 96c-61.9 0-112 50.1-112 112v48c0 61.9 50.1 112 112 112s112-50.1 112-112v-48c0-61.9-50.1-112-112-112zm0 48c35.3 0 64 28.7 64 64v48c0 35.3-28.7 64-64 64s-64-28.7-64-64v-48c0-35.3 28.7-64 64-64z"/>
+  <rect x="176" y="328" width="160" height="40" rx="12" fill="#fff"/>
+  <path fill="#ccfbf1" d="M160 384h192v32H160z"/>
+</svg>

@@ -13,7 +13,15 @@ import {
 import { registrarAuditLog } from "@/lib/audit/stock-audit";
 import { anioMesActual, mesAnterior, permiteCierreMensualCalendarioOperacion } from "@/lib/domain/fecha-mes";
 import { mesEstaCerrado } from "@/lib/posta/cierre-mensual";
+import {
+  registrarConsumoDiario,
+  revalidateRutasTrasConsumoDiario,
+} from "@/lib/posta/registrar-consumo-diario";
 import { snapshotLedgerMesPosta, type MedLedgerMin } from "@/lib/posta/snapshot-ledger-mes-posta";
+import {
+  sincronizarStockMensualDesdeRegistro,
+  validarMesAbierto,
+} from "@/lib/posta/sincronizar-stock-mensual-desde-registro";
 import {
   cargarAgregadosIngresoConsumoPorMedicamentos,
   cierreFinDeMesAcumulado,
@@ -74,8 +82,8 @@ export async function registrarConsumoDiarioCeldaAction(
     return { error: gate.error };
   }
 
-  const fecha = formData.get("fecha")?.toString().trim();
-  const medicamentoId = formData.get("medicamento_id")?.toString().trim();
+  const fecha = formData.get("fecha")?.toString().trim() ?? "";
+  const medicamentoId = formData.get("medicamento_id")?.toString().trim() ?? "";
   const conAvis = Number.parseInt(
     formData.get("cantidad_con_avis")?.toString() ?? "",
     10
@@ -85,95 +93,25 @@ export async function registrarConsumoDiarioCeldaAction(
     10
   );
   const observacion = parseTextoOpcional(formData.get("observacion"));
-
-  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !medicamentoId) {
-    return { error: "Fecha o medicamento no válidos." };
-  }
-
-  if (
-    Number.isNaN(conAvis) ||
-    Number.isNaN(sinAvis) ||
-    conAvis < 0 ||
-    sinAvis < 0
-  ) {
-    return {
-      error:
-        "Las cantidades deben ser números enteros mayores o iguales a 0.",
-    };
-  }
+  const clientSyncId = formData.get("client_sync_id")?.toString().trim() || null;
 
   const supabase = await createServerSupabaseClient();
-  const { anio, mes } = anioMesActual(new Date(fecha + "T12:00:00"));
-  const abierto = await validarMesAbierto(supabase, postaId, anio, mes);
-  if (!abierto.ok) {
-    return { error: abierto.error };
-  }
-
-  const { data: previo } = await supabase
-    .from("movimientos_diarios_consumo")
-    .select(
-      "id, cantidad_con_avis, cantidad_sin_avis, total_dia, observacion, anulado"
-    )
-    .eq("posta_id", postaId)
-    .eq("medicamento_id", medicamentoId)
-    .eq("fecha", fecha)
-    .maybeSingle();
-
-  const { error } = await supabase.from("movimientos_diarios_consumo").upsert(
-    {
-      posta_id: postaId,
-      medicamento_id: medicamentoId,
-      fecha,
-      cantidad_con_avis: conAvis,
-      cantidad_sin_avis: sinAvis,
-      observacion,
-      anulado: false,
-      anulado_por: null,
-      anulado_en: null,
-      motivo_anulacion: null,
-      created_by: gate.userId,
-    },
-    { onConflict: "posta_id,medicamento_id,fecha" }
-  );
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  const sync = await sincronizarStockMensualDesdeRegistro(
-    supabase,
+  const result = await registrarConsumoDiario(supabase, {
     postaId,
     medicamentoId,
-    anio,
-    mes
-  );
-  if (sync.error) {
-    return { error: sync.error };
-  }
-
-  await registrarAuditLog(supabase, {
-    actorId: gate.userId,
-    action: previo ? "consumo_diario.corregido" : "consumo_diario.creado",
-    entity: "movimientos_diarios_consumo",
-    entityId:
-      previo && typeof previo === "object" && "id" in previo
-        ? String((previo as { id: string }).id)
-        : null,
-    metadata: {
-      postaId,
-      medicamentoId,
-      fecha,
-      anterior: previo ?? null,
-      nuevo: { cantidad_con_avis: conAvis, cantidad_sin_avis: sinAvis, observacion },
-    },
+    fecha,
+    cantidadConAvis: conAvis,
+    cantidadSinAvis: sinAvis,
+    observacion,
+    clientSyncId,
+    userId: gate.userId,
   });
 
-  revalidatePath(`/postas/${postaId}/descuento`);
-  revalidatePath(`/postas/${postaId}/dashboard`);
-  revalidatePath(`/postas/${postaId}/ingresos`);
-  revalidatePath(`/postas/${postaId}/pedidos`);
-  revalidatePath("/admin/medicamentos");
-  revalidatePath("/admin");
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  revalidateRutasTrasConsumoDiario(postaId);
   return {
     ok: true,
     success: "Descuento del día guardado.",
@@ -287,107 +225,6 @@ const TIPOS_ORIGEN_INGRESO = new Set(["COMPRA", "TRASLADO", "AJUSTE", "OTRO"]);
 function parseTextoOpcional(raw: FormDataEntryValue | null): string | null {
   const v = raw?.toString().trim() ?? "";
   return v.length > 0 ? v.slice(0, 500) : null;
-}
-
-async function validarMesAbierto(
-  supabase: SupabaseSrv,
-  postaId: string,
-  anio: number,
-  mes: number
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (await mesEstaCerrado(supabase, postaId, anio, mes)) {
-    return {
-      ok: false,
-      error:
-        "Este mes ya está cerrado. Solicita reapertura a administración antes de corregir o registrar movimientos.",
-    };
-  }
-  return { ok: true };
-}
-
-/**
- * Recalcula `stock_mensual_posta` del mes a partir del registro (ingresos + descuentos en base).
- */
-async function sincronizarStockMensualDesdeRegistro(
-  supabase: SupabaseSrv,
-  postaId: string,
-  medicamentoId: string,
-  anio: number,
-  mes: number
-): Promise<{ error?: string }> {
-  const { anio: ap, mes: mp } = mesAnterior(anio, mes);
-  const agg = await cargarAgregadosIngresoConsumoPorMedicamentos(supabase, postaId, [
-    medicamentoId,
-  ]);
-  const cierrePrev = cierreFinDeMesAcumulado(agg, medicamentoId, ap, mp);
-  const ymk = ymKey(anio, mes);
-  const totIng = agg.get(medicamentoId)?.ingPorMes.get(ymk) ?? 0;
-  const totCons = agg.get(medicamentoId)?.consPorMes.get(ymk) ?? 0;
-  const stockFinal = Math.max(0, cierrePrev + totIng - totCons);
-
-  const [{ data: stockRow }, { data: med, error: eMed }] = await Promise.all([
-    supabase
-      .from("stock_mensual_posta")
-      .select("id, stock_critico_config, stock_recomendado_config")
-      .eq("posta_id", postaId)
-      .eq("medicamento_id", medicamentoId)
-      .eq("anio", anio)
-      .eq("mes", mes)
-      .maybeSingle(),
-    supabase
-      .from("medicamentos")
-      .select("stock_recomendado_default, stock_critico_default")
-      .eq("id", medicamentoId)
-      .maybeSingle(),
-  ]);
-
-  if (eMed || !med || typeof med !== "object") {
-    return { error: "No se encontró el medicamento." };
-  }
-
-  const recDef = Number(
-    (med as { stock_recomendado_default?: number }).stock_recomendado_default
-  );
-  const critDef = Number(
-    (med as { stock_critico_default?: number }).stock_critico_default
-  );
-  const recVal = Number.isFinite(recDef) ? Math.max(0, Math.trunc(recDef)) : 0;
-  const critVal = Number.isFinite(critDef) ? Math.max(0, Math.trunc(critDef)) : 0;
-
-  if (stockRow && typeof stockRow === "object" && "id" in stockRow) {
-    const critCfg = Number(
-      (stockRow as { stock_critico_config: number }).stock_critico_config
-    );
-    const recCfg = Number(
-      (stockRow as { stock_recomendado_config: number }).stock_recomendado_config
-    );
-    const { error } = await supabase
-      .from("stock_mensual_posta")
-      .update({
-        stock_inicial: cierrePrev,
-        stock_ingresado_mes: totIng,
-        stock_final: stockFinal,
-        stock_critico_config: Number.isFinite(critCfg) ? critCfg : critVal,
-        stock_recomendado_config: Number.isFinite(recCfg) ? recCfg : recVal,
-      })
-      .eq("id", (stockRow as { id: string }).id);
-    if (error) return { error: error.message };
-  } else {
-    const { error } = await supabase.from("stock_mensual_posta").insert({
-      posta_id: postaId,
-      medicamento_id: medicamentoId,
-      anio,
-      mes,
-      stock_inicial: cierrePrev,
-      stock_ingresado_mes: totIng,
-      stock_final: stockFinal,
-      stock_critico_config: critVal,
-      stock_recomendado_config: recVal,
-    });
-    if (error) return { error: error.message };
-  }
-
-  return {};
 }
 
 /**

@@ -308,6 +308,9 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
         postaId={postaId}
         anio={anio}
         mes={mes}
+        mesTitulo={tituloMes(anio, mes)}
+        postaNombre={postaNombreCabecera}
+        postaCodigo={postaCodigoCabecera}
         ymQuery={ymQuery}
         pedidoId={pedidoId}
         estado={estadoPedido}

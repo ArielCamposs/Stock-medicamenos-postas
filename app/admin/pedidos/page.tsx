@@ -169,20 +169,8 @@ export default async function AdminPedidosPage() {
     <div className="space-y-8">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Pedidos mensuales</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Cada fila es el <strong className="text-foreground">pedido mensual de una posta</strong> (un
-          registro por posta y mes). No se listan borradores: solo pedidos ya enviados u otro estado posterior.
-          Este listado es un <strong className="text-foreground">solo historial</strong>
-          : ves pedidos pendientes de seguimiento en bandeja y los que ya figuran como listo. Los que requieren
-          atención aparecen arriba. <strong className="text-foreground">Hacé clic en la fila</strong> del pedido para
-          abrir el detalle y exportar a Excel (PDF, Listo y Acción no abren el modal). El PDF solo aplica cuando el
-          pedido ya fue enviado desde la posta.
-        </p>
         {lista.length > 0 ? (
           <p className="mt-2 text-xs text-muted-foreground tabular-nums">
-            Pendientes en bandeja (enviado / observado / aprobado / despachado, sin listo):{" "}
-            <span className="font-medium text-foreground">{nPendientesBandeja}</span>
-            {" · "}
             Marcados como listo: <span className="font-medium text-foreground">{nMarcadosListo}</span>
           </p>
         ) : null}
