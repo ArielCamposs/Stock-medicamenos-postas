@@ -29,6 +29,18 @@ export function mergePendingIntoMedicamentos(
       if (!local) {
         return { ...d };
       }
+      if (local.accion === "anular") {
+        return {
+          ...d,
+          con: 0,
+          sin: 0,
+          total: 0,
+          observacion: null,
+          syncPendiente: local.estado === "pending",
+          syncError: local.estado === "error",
+          syncErrorMessage: local.errorMessage,
+        };
+      }
       const total = local.cantidadConAvis + local.cantidadSinAvis;
       return {
         ...d,

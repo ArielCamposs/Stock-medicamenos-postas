@@ -1,6 +1,6 @@
 import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
-import { ExpirationPlugin, NetworkFirst, Serwist } from "serwist";
+import { ExpirationPlugin, NetworkFirst, NetworkOnly, Serwist } from "serwist";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -19,6 +19,10 @@ const serwist = new Serwist({
   clientsClaim: true,
   navigationPreload: false,
   runtimeCaching: [
+    {
+      matcher: ({ url }) => url.pathname === "/api/connectivity",
+      handler: new NetworkOnly(),
+    },
     {
       matcher: ({ request, url }) =>
         request.mode === "navigate" &&

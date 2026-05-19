@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
+import { canReachServer, markServerUnreachable } from "@/lib/offline/connectivity";
 import { getErrorMovements, getPendingMovements } from "@/lib/offline/db";
 import { syncPendingMovements } from "@/lib/offline/sync";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
@@ -23,7 +24,7 @@ export function DescuentoOfflineBar({
   const router = useRouter();
   const { toast } = useToast();
   const online = useOnlineStatus();
-  const wasOfflineRef = useRef(false);
+  const syncingRef = useRef(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [errorCount, setErrorCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -42,13 +43,42 @@ export function DescuentoOfflineBar({
     void reloadCounts();
   }, [reloadCounts, refreshToken]);
 
+  /** Solo se llama al pulsar «Sincronizar pendientes». */
   const runSync = useCallback(async () => {
-    if (!online || syncing) return;
+    if (syncingRef.current) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      markServerUnreachable();
+      const msg =
+        "Sin conexión. Los pendientes se enviarán cuando vuelva internet y pulses sincronizar.";
+      setFlash(msg);
+      toast(msg, "error");
+      return;
+    }
+
+    syncingRef.current = true;
     setSyncing(true);
     setFlash(null);
     try {
+      if (!(await canReachServer())) {
+        markServerUnreachable();
+        const msg =
+          "Sin conexión. Los pendientes se enviarán cuando vuelva internet y pulses sincronizar.";
+        setFlash(msg);
+        toast(msg, "error");
+        return;
+      }
+
       const result = await syncPendingMovements(postaId);
       await reloadCounts();
+
+      if (result.offline) {
+        markServerUnreachable();
+        const msg =
+          "Sin conexión. Los pendientes se enviarán cuando vuelva internet y pulses sincronizar.";
+        setFlash(msg);
+        toast(msg, "error");
+        return;
+      }
       if (result.total === 0) {
         const msg = "No hay descuentos pendientes.";
         setFlash(msg);
@@ -63,31 +93,19 @@ export function DescuentoOfflineBar({
         setFlash(msg);
         toast(msg, "error");
         router.refresh();
-      } else {
-        const msg = "Sin conexión. Los pendientes se enviarán cuando vuelva internet.";
-        setFlash(msg);
-        toast(msg, "error");
       }
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
-  }, [online, syncing, postaId, reloadCounts, router, toast]);
-
-  useEffect(() => {
-    if (!online) {
-      wasOfflineRef.current = true;
-      return;
-    }
-    if (wasOfflineRef.current && pendingCount > 0) {
-      wasOfflineRef.current = false;
-      void runSync();
-    }
-  }, [online, pendingCount, runSync]);
+  }, [postaId, reloadCounts, router, toast]);
 
   const tienePendientes = pendingCount > 0 || errorCount > 0;
   if (!tienePendientes && !flash && !syncing) {
     return null;
   }
+
+  const puedeSincronizar = online && (pendingCount > 0 || errorCount > 0);
 
   return (
     <div
@@ -101,7 +119,13 @@ export function DescuentoOfflineBar({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {!online && (pendingCount > 0 || errorCount > 0) ? (
           <span className="text-xs text-amber-950 dark:text-amber-50">
-            Los descuentos pendientes se guardan en este dispositivo hasta que vuelva internet.
+            Cambios guardados en este dispositivo. Cuando tengas internet, pulsa
+            sincronizar.
+          </span>
+        ) : null}
+        {online && (pendingCount > 0 || errorCount > 0) ? (
+          <span className="text-xs text-muted-foreground">
+            Hay cambios locales por enviar. Pulsa sincronizar para subirlos al servidor.
           </span>
         ) : null}
         {pendingCount > 0 ? (
@@ -116,7 +140,7 @@ export function DescuentoOfflineBar({
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {(pendingCount > 0 || errorCount > 0) && online ? (
+        {puedeSincronizar ? (
           <Button
             type="button"
             size="sm"

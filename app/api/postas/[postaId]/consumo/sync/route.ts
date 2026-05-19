@@ -4,6 +4,7 @@ import {
   puedeRegistrarOperacionesPosta,
   requirePerfilUsuario,
 } from "@/lib/auth/session";
+import { anularConsumoDiario } from "@/lib/posta/anular-consumo-diario";
 import {
   registrarConsumoDiario,
   revalidateRutasTrasConsumoDiario,
@@ -16,11 +17,13 @@ export const dynamic = "force-dynamic";
 
 type SyncMovementBody = {
   clientSyncId: string;
+  accion?: "registrar" | "anular";
   medicamentoId: string;
   fecha: string;
   cantidadConAvis: number;
   cantidadSinAvis: number;
   observacion?: string | null;
+  motivoAnulacion?: string | null;
 };
 
 type SyncRequestBody = {
@@ -87,6 +90,10 @@ export async function POST(
       typeof observacionRaw === "string"
         ? observacionRaw.trim().slice(0, 500) || null
         : null;
+    const accion = mov.accion === "anular" ? "anular" : "registrar";
+    const motivoRaw = mov.motivoAnulacion;
+    const motivoAnulacion =
+      typeof motivoRaw === "string" ? motivoRaw.trim().slice(0, 500) : "";
 
     if (!clientSyncId) {
       results.push({
@@ -94,6 +101,44 @@ export async function POST(
         ok: false,
         error: "Falta clientSyncId.",
       });
+      continue;
+    }
+
+    if (accion === "anular") {
+      if (!motivoAnulacion) {
+        results.push({
+          clientSyncId,
+          ok: false,
+          error: "Indica un motivo para anular el descuento.",
+        });
+        continue;
+      }
+      if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !medicamentoId) {
+        results.push({
+          clientSyncId,
+          ok: false,
+          error: "Fecha o medicamento no válidos.",
+        });
+        continue;
+      }
+
+      const anular = await anularConsumoDiario(supabase, {
+        postaId,
+        medicamentoId,
+        fecha,
+        motivo: motivoAnulacion,
+        userId: user.id,
+      });
+
+      if (anular.ok) {
+        results.push({
+          clientSyncId,
+          ok: true,
+          entityId: anular.entityId,
+        });
+      } else {
+        results.push({ clientSyncId, ok: false, error: anular.error });
+      }
       continue;
     }
 

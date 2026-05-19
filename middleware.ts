@@ -33,6 +33,10 @@ export async function middleware(request: NextRequest) {
   const { response, user } = await updateSession(request);
   const pathname = request.nextUrl.pathname;
 
+  if (pathname === "/api/connectivity") {
+    return response;
+  }
+
   if (pathname === "/login") {
     if (user) {
       // Si hay ?error=… no mandar a /. Sin perfil/posta la app redirige aquí desde `/`;

@@ -1,11 +1,21 @@
 import {
+  canReachServer,
+  fetchWithTimeout,
+  isAbortOrNetwork,
+  markServerReachable,
+  markServerUnreachable,
+} from "@/lib/offline/connectivity";
+import {
   deleteMovement,
   getPendingMovements,
   markMovementAsError,
   markMovementAsSynced,
   pruneSyncedMovements,
+  resetErrorMovementsToPending,
 } from "@/lib/offline/db";
 import type { LocalMovement } from "@/lib/offline/types";
+
+const SYNC_FETCH_MS = 12_000;
 
 export type SyncPendingResult = {
   ok: boolean;
@@ -13,39 +23,69 @@ export type SyncPendingResult = {
   failed: number;
   total: number;
   errors: { idLocal: string; error: string }[];
+  offline?: boolean;
 };
 
-function isNetworkError(err: unknown): boolean {
-  if (err instanceof TypeError) return true;
-  if (err instanceof Error && /fetch|network|failed/i.test(err.message)) {
-    return true;
+function offlineResult(total: number): SyncPendingResult {
+  return {
+    ok: false,
+    synced: 0,
+    failed: 0,
+    total,
+    errors: [],
+    offline: true,
+  };
+}
+
+async function ensureReachable(): Promise<boolean> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return false;
   }
-  return false;
+  return canReachServer();
 }
 
 export async function syncPendingMovements(postaId: string): Promise<SyncPendingResult> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    markServerUnreachable();
+    const pending = await getPendingMovements(postaId);
+    return offlineResult(pending.length);
+  }
+
+  await resetErrorMovementsToPending(postaId);
+
   const pending = await getPendingMovements(postaId);
   if (pending.length === 0) {
     await pruneSyncedMovements();
     return { ok: true, synced: 0, failed: 0, total: 0, errors: [] };
   }
 
+  if (!(await ensureReachable())) {
+    markServerUnreachable();
+    return offlineResult(pending.length);
+  }
+
   try {
-    const res = await fetch(`/api/postas/${postaId}/consumo/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        movements: pending.map((m) => ({
-          clientSyncId: m.idLocal,
-          medicamentoId: m.medicamentoId,
-          fecha: m.fechaConsumo,
-          cantidadConAvis: m.cantidadConAvis,
-          cantidadSinAvis: m.cantidadSinAvis,
-          observacion: m.observacion,
-        })),
-      }),
-    });
+    const res = await fetchWithTimeout(
+      `/api/postas/${postaId}/consumo/sync`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          movements: pending.map((m) => ({
+            clientSyncId: m.idLocal,
+            accion: m.accion ?? "registrar",
+            medicamentoId: m.medicamentoId,
+            fecha: m.fechaConsumo,
+            cantidadConAvis: m.cantidadConAvis,
+            cantidadSinAvis: m.cantidadSinAvis,
+            observacion: m.observacion,
+            motivoAnulacion: m.motivoAnulacion ?? null,
+          })),
+        }),
+      },
+      SYNC_FETCH_MS
+    );
 
     if (!res.ok) {
       const text = await res.text();
@@ -95,6 +135,7 @@ export async function syncPendingMovements(postaId: string): Promise<SyncPending
     }
 
     await pruneSyncedMovements();
+    markServerReachable();
 
     return {
       ok: failed === 0,
@@ -104,14 +145,9 @@ export async function syncPendingMovements(postaId: string): Promise<SyncPending
       errors,
     };
   } catch (err) {
-    if (isNetworkError(err)) {
-      return {
-        ok: false,
-        synced: 0,
-        failed: 0,
-        total: pending.length,
-        errors: [],
-      };
+    if (isAbortOrNetwork(err)) {
+      markServerUnreachable();
+      return offlineResult(pending.length);
     }
     const message = err instanceof Error ? err.message : "Error desconocido.";
     for (const m of pending) {
@@ -131,28 +167,34 @@ export async function trySyncSingleMovement(
   postaId: string,
   movement: LocalMovement
 ): Promise<{ ok: true } | { ok: false; offline: boolean; error?: string }> {
-  if (!navigator.onLine) {
+  if (!(await ensureReachable())) {
     return { ok: false, offline: true };
   }
 
   try {
-    const res = await fetch(`/api/postas/${postaId}/consumo/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        movements: [
-          {
-            clientSyncId: movement.idLocal,
-            medicamentoId: movement.medicamentoId,
-            fecha: movement.fechaConsumo,
-            cantidadConAvis: movement.cantidadConAvis,
-            cantidadSinAvis: movement.cantidadSinAvis,
-            observacion: movement.observacion,
-          },
-        ],
-      }),
-    });
+    const res = await fetchWithTimeout(
+      `/api/postas/${postaId}/consumo/sync`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          movements: [
+            {
+              clientSyncId: movement.idLocal,
+              accion: movement.accion ?? "registrar",
+              medicamentoId: movement.medicamentoId,
+              fecha: movement.fechaConsumo,
+              cantidadConAvis: movement.cantidadConAvis,
+              cantidadSinAvis: movement.cantidadSinAvis,
+              observacion: movement.observacion,
+              motivoAnulacion: movement.motivoAnulacion ?? null,
+            },
+          ],
+        }),
+      },
+      SYNC_FETCH_MS
+    );
 
     if (!res.ok) {
       const text = await res.text();
@@ -179,7 +221,7 @@ export async function trySyncSingleMovement(
     await markMovementAsError(movement.idLocal, errMsg);
     return { ok: false, offline: false, error: errMsg };
   } catch (err) {
-    if (isNetworkError(err)) {
+    if (isAbortOrNetwork(err)) {
       return { ok: false, offline: true };
     }
     const message = err instanceof Error ? err.message : "Error desconocido.";

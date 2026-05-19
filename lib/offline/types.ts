@@ -1,5 +1,7 @@
 export type LocalMovementStatus = "pending" | "synced" | "error";
 
+export type LocalMovementAccion = "registrar" | "anular";
+
 /** Descuento diario guardado localmente (IndexedDB) antes o durante sync. */
 export type LocalMovement = {
   idLocal: string;
@@ -9,6 +11,8 @@ export type LocalMovement = {
   cantidadConAvis: number;
   cantidadSinAvis: number;
   observacion: string | null;
+  accion?: LocalMovementAccion;
+  motivoAnulacion?: string | null;
   estado: LocalMovementStatus;
   errorMessage?: string;
   createdAtLocal: string;

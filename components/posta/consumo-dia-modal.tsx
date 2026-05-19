@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { eliminarConsumoDiaAction } from "@/app/actions/posta";
-import type { PostaActionState } from "@/app/actions/posta";
+import { encolarAnulacionLocal } from "@/lib/offline/anular-local";
 import { addLocalMovement } from "@/lib/offline/db";
-import { trySyncSingleMovement } from "@/lib/offline/sync";
+import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { nivelAlertaStock } from "@/lib/posta/admin-stock-alerta-postas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,25 +67,31 @@ export function ConsumoDiaModal({
   onLocalSaved,
 }: ConsumoDiaModalProps) {
   const router = useRouter();
+  const online = useOnlineStatus();
   const [saveInfo, setSaveInfo] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [anulando, setAnulando] = useState(false);
+  const [delErrorLocal, setDelErrorLocal] = useState<string | null>(null);
+  const savingRef = useRef(false);
 
   const boundEliminar = eliminarConsumoDiaAction.bind(null, postaId);
-  const [delState, delAction, delPending] = useActionState(
-    boundEliminar as (s: PostaActionState, fd: FormData) => Promise<PostaActionState>,
-    {}
-  );
 
   const [con, setCon] = useState(String(initialCon));
   const [sin, setSin] = useState(String(initialSin));
 
   useEffect(() => {
-    if (delState.ok) {
-      router.refresh();
-      onClose();
-    }
-  }, [delState.ok, onClose, router]);
+    savingRef.current = saving;
+  }, [saving]);
+
+  useEffect(() => {
+    if (online) return;
+    if (!savingRef.current) return;
+    setSaving(false);
+    setSaveInfo(
+      "Sin conexión. El descuento quedó guardado en este dispositivo y se sincronizará cuando vuelva internet."
+    );
+  }, [online]);
 
   const conN = con.trim() === "" ? 0 : Number.parseInt(con, 10);
   const sinN = sin.trim() === "" ? 0 : Number.parseInt(sin, 10);
@@ -114,6 +120,52 @@ export function ConsumoDiaModal({
           : null;
 
   const hayRegistro = initialCon > 0 || initialSin > 0;
+  const teniaRegistroEnServidor = hayRegistro;
+
+  async function handleAnular(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setDelErrorLocal(null);
+    setSaveError(null);
+
+    const motivo = new FormData(e.currentTarget).get("motivo_anulacion")?.toString().trim();
+    if (!motivo) {
+      setDelErrorLocal("Indica un motivo para anular el descuento.");
+      return;
+    }
+
+    setAnulando(true);
+    try {
+      const sinRed = typeof navigator !== "undefined" && !navigator.onLine;
+
+      if (sinRed) {
+        await encolarAnulacionLocal({
+          postaId,
+          medicamentoId,
+          fechaISO,
+          motivo,
+          teniaRegistroEnServidor,
+        });
+        onLocalSaved?.();
+        onClose();
+        return;
+      }
+
+      const fd = new FormData(e.currentTarget);
+      fd.set("fecha", fechaISO);
+      fd.set("medicamento_id", medicamentoId);
+      const result = await boundEliminar({}, fd);
+      if (result.error) {
+        setDelErrorLocal(result.error);
+        return;
+      }
+      router.refresh();
+      onClose();
+    } catch {
+      setDelErrorLocal("No se pudo anular en este dispositivo.");
+    } finally {
+      setAnulando(false);
+    }
+  }
 
   async function handleGuardar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -133,9 +185,8 @@ export function ConsumoDiaModal({
 
     setSaving(true);
     try {
-      const idLocal = crypto.randomUUID();
-      const local = await addLocalMovement({
-        idLocal,
+      await addLocalMovement({
+        idLocal: crypto.randomUUID(),
         postaId,
         medicamentoId,
         fechaConsumo: fechaISO,
@@ -145,24 +196,8 @@ export function ConsumoDiaModal({
         estado: "pending",
       });
 
-      const sync = await trySyncSingleMovement(postaId, local);
-
-      if (sync.ok) {
-        setSaveInfo("Descuento guardado y sincronizado.");
-        onLocalSaved?.();
-        router.refresh();
-        onClose();
-        return;
-      }
-
-      if (sync.offline) {
-        setSaveInfo("Guardado localmente. Pendiente de sincronización cuando haya internet.");
-        onLocalSaved?.();
-        onClose();
-        return;
-      }
-
-      setSaveError(sync.error ?? "No se pudo sincronizar con el servidor.");
+      onLocalSaved?.();
+      onClose();
     } catch {
       setSaveError("No se pudo guardar en este dispositivo.");
     } finally {
@@ -213,12 +248,12 @@ export function ConsumoDiaModal({
             {saveInfo}
           </p>
         ) : null}
-        {delState.error ? (
+        {delErrorLocal ? (
           <p
             className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
             role="alert"
           >
-            {delState.error}
+            {delErrorLocal}
           </p>
         ) : null}
 
@@ -307,14 +342,17 @@ export function ConsumoDiaModal({
                 <Button type="button" variant="outline" onClick={onClose}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={saving || delPending}>
+                <Button type="submit" disabled={saving || anulando}>
                   {saving ? "Guardando…" : "Guardar"}
                 </Button>
               </div>
             </form>
 
             {hayRegistro ? (
-              <form action={delAction} className="mt-4 border-t border-border pt-4">
+              <form
+                onSubmit={(ev) => void handleAnular(ev)}
+                className="mt-4 border-t border-border pt-4"
+              >
                 <input type="hidden" name="fecha" value={fechaISO} />
                 <input type="hidden" name="medicamento_id" value={medicamentoId} />
                 <div className="mb-3 space-y-2">
@@ -331,9 +369,9 @@ export function ConsumoDiaModal({
                   type="submit"
                   variant="destructive"
                   className="w-full"
-                  disabled={saving || delPending}
+                  disabled={saving || anulando}
                 >
-                  {delPending ? "Anulando…" : "Anular día"}
+                  {anulando ? "Anulando…" : "Anular día"}
                 </Button>
               </form>
             ) : null}

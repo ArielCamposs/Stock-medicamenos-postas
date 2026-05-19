@@ -98,6 +98,18 @@ export async function getPendingMovements(postaId?: string): Promise<LocalMoveme
   return pending.filter((m) => m.postaId === postaId);
 }
 
+/** Reintenta movimientos en error pasándolos a pendientes. */
+export async function resetErrorMovementsToPending(postaId?: string): Promise<number> {
+  const err = await getErrorMovements(postaId);
+  for (const m of err) {
+    await updateLocalMovement(m.idLocal, {
+      estado: "pending",
+      errorMessage: undefined,
+    });
+  }
+  return err.length;
+}
+
 export async function getErrorMovements(postaId?: string): Promise<LocalMovement[]> {
   const db = await getDb();
   const err = await db.getAllFromIndex(STORE, "by_estado", "error");

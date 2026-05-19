@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -70,51 +71,71 @@ export default async function LoginPage({ searchParams }: PageProps) {
     errorCodigoForm === "perfil_inactivo";
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-12">
-      <div className="flex max-w-md flex-col items-center gap-3 text-center">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-          <svg
-            viewBox="0 0 24 24"
-            className="size-8"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            aria-hidden
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-            />
-          </svg>
-        </div>
-        <div>
+    <div className="flex min-h-dvh w-full flex-1 flex-col lg:h-dvh lg:flex-row lg:overflow-hidden">
+      {/* Panel izquierdo ~60%: imagen DESAM visible */}
+      <aside
+        className="relative hidden shrink-0 lg:fixed lg:inset-y-0 lg:left-0 lg:z-0 lg:block lg:h-dvh lg:w-[60%]"
+        aria-hidden
+      >
+        <Image
+          src="/DESAM.jpeg"
+          alt=""
+          fill
+          priority
+          sizes="60vw"
+          className="object-cover object-center"
+        />
+        <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-black/25 to-transparent" />
+      </aside>
+
+      {/* Móvil: franja superior con la imagen */}
+      <div className="relative h-36 shrink-0 lg:hidden">
+        <Image
+          src="/DESAM.jpeg"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background" />
+      </div>
+
+      {/* Panel derecho ~40%, invade un poco el izquierdo en desktop */}
+      <main
+        className={cn(
+          "relative z-10 flex flex-1 flex-col justify-center gap-8 bg-background px-6 py-10",
+          "lg:ml-[calc(60%-3.5rem)] lg:min-h-dvh lg:w-[calc(40%+3.5rem)] lg:max-w-xl lg:rounded-l-3xl lg:border lg:border-border/60",
+          "lg:px-10 lg:py-14 lg:shadow-2xl"
+        )}
+      >
+        <div className="mx-auto flex w-full max-w-md flex-col items-center gap-2 text-center lg:items-stretch lg:text-left">
           <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
             Postas DESAM
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Inventario de medicamentos e insumos por posta rural
           </p>
         </div>
-      </div>
-      <LoginForm redirectTo={redirectTo} errorCodigo={errorCodigoForm} />
 
-      {necesitaCerrarSesion ? (
-        <form action={signOutAction} className="w-full max-w-md">
-          <Button type="submit" variant="outline" className="w-full">
-            Cerrar sesión e intentar con otra cuenta
-          </Button>
-        </form>
-      ) : null}
+        <LoginForm redirectTo={redirectTo} errorCodigo={errorCodigoForm} />
 
-      <Link
-        href="/"
-        className={cn(
-          buttonVariants({ variant: "ghost", size: "sm" }),
-          "text-muted-foreground"
-        )}
-      >
-      </Link>
+        {necesitaCerrarSesion ? (
+          <form action={signOutAction} className="mx-auto w-full max-w-md">
+            <Button type="submit" variant="outline" className="w-full">
+              Cerrar sesión e intentar con otra cuenta
+            </Button>
+          </form>
+        ) : null}
+
+        <Link
+          href="/"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "sm" }),
+            "mx-auto text-muted-foreground lg:mx-0"
+          )}
+        />
+      </main>
     </div>
   );
 }

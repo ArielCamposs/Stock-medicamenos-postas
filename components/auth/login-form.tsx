@@ -1,36 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  mapCorreoVerificado,
+  mapSupabaseLoginError,
+  mensajePerfilAccesible,
+  validarCamposLogin,
+  type LoginFieldError,
+} from "@/lib/auth/login-errors";
+import { verificarCorreoLogin } from "@/lib/auth/verificar-correo-login";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { cn } from "@/lib/utils";
 
-function mensajeErrorCodigo(code: string | undefined) {
-  switch (code) {
-    case "sin_perfil":
-      return "No hay perfil vinculado a esta cuenta. Solicita ayuda al administrador para crear tu fila en perfiles_usuario.";
-    case "sin_posta":
-      return "Tu perfil es de encargado de posta pero no tiene posta_id. Solicita al administrador que te asigne la posta.";
-    case "perfil_inconsistente":
-      return "El rol de administración general no debe tener posta asignada (posta_id debe quedar vacío en la base de datos). Solicita que corrijan tu fila en perfiles_usuario.";
-    case "perfil_inactivo":
-      return "Tu usuario tiene perfil pero está marcado como inactivo (activo = false). Solicita al administrador que active tu cuenta en perfiles_usuario.";
-    case "credenciales":
-      return "Credenciales inválidas.";
-    default:
-      return null;
-  }
-}
+type ShakeTarget = "email" | "password" | "form";
 
 type Props = {
   redirectTo: string;
@@ -41,14 +34,107 @@ export function LoginForm({ redirectTo, errorCodigo }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(() =>
-    errorCodigo ? mensajeErrorCodigo(errorCodigo) : null
+
+  const [emailError, setEmailError] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
+  const [formError, setFormError] = useState(false);
+  const [a11yMessage, setA11yMessage] = useState<string | null>(null);
+  const [shakeTarget, setShakeTarget] = useState<ShakeTarget | null>(null);
+  const shakeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const perfilErrorHandled = useRef(false);
+
+  const runShake = useCallback((target: ShakeTarget) => {
+    if (shakeTimer.current) clearTimeout(shakeTimer.current);
+    setShakeTarget(null);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setShakeTarget(target);
+        shakeTimer.current = setTimeout(() => setShakeTarget(null), 520);
+      });
+    });
+  }, []);
+
+  const applyFieldError = useCallback(
+    (err: LoginFieldError) => {
+      setA11yMessage(err.a11yMessage);
+      setFormError(false);
+      setEmailError(err.fields.includes("email"));
+      setPasswordError(err.fields.includes("password"));
+
+      const target: ShakeTarget =
+        err.fields.length === 2
+          ? "form"
+          : err.fields[0] === "email"
+            ? "email"
+            : "password";
+      runShake(target);
+    },
+    [runShake]
   );
+
+  const applyFormError = useCallback(
+    (message: string) => {
+      setA11yMessage(message);
+      setEmailError(false);
+      setPasswordError(false);
+      setFormError(true);
+      runShake("form");
+    },
+    [runShake]
+  );
+
+  const clearErrors = useCallback(() => {
+    setEmailError(false);
+    setPasswordError(false);
+    setFormError(false);
+    setA11yMessage(null);
+    setShakeTarget(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (shakeTimer.current) clearTimeout(shakeTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (perfilErrorHandled.current || !errorCodigo) return;
+    const msg = mensajePerfilAccesible(errorCodigo);
+    if (!msg) return;
+    perfilErrorHandled.current = true;
+
+    if (errorCodigo === "credenciales") {
+      applyFieldError({ fields: ["password"], a11yMessage: msg });
+    } else {
+      applyFormError(msg);
+    }
+  }, [errorCodigo, applyFieldError, applyFormError]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    clearErrors();
     setLoading(true);
-    setErrorMsg(null);
+
+    const validation = validarCamposLogin(email, password);
+    if (validation) {
+      setLoading(false);
+      applyFieldError(validation);
+      return;
+    }
+
+    const verificacion = await verificarCorreoLogin(email);
+    if ("error" in verificacion) {
+      setLoading(false);
+      applyFormError(verificacion.error);
+      return;
+    }
+
+    const errorCorreo = mapCorreoVerificado(verificacion.estado);
+    if (errorCorreo) {
+      setLoading(false);
+      applyFieldError(errorCorreo);
+      return;
+    }
 
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.auth.signInWithPassword({
@@ -58,31 +144,33 @@ export function LoginForm({ redirectTo, errorCodigo }: Props) {
 
     if (error) {
       setLoading(false);
-      setErrorMsg(error.message ?? "Credenciales inválidas.");
+      applyFieldError(mapSupabaseLoginError(error));
       return;
     }
 
-    // Esperar a que la sesión quede persistida en cookies (PKCE + chunks): si
-    // navegamos antes, el RSC/middleware pueden no ver al usuario aún.
     const {
       data: { session },
     } = await supabase.auth.getSession();
 
     if (!session) {
       setLoading(false);
-      setErrorMsg(
+      applyFormError(
         "Sesión no disponible después de iniciar sesión. Intenta otra vez o recarga la página."
       );
       return;
     }
 
-    // Navegación completa para que la siguiente petición lleve ya las cookies
-    // al middleware y a los Server Components (evita pantalla en blanco / bucles).
     window.location.assign(redirectTo);
   }
 
   return (
-    <Card className="w-full max-w-md">
+    <Card
+      className={cn(
+        "w-full max-w-md",
+        formError && "login-card-error",
+        shakeTarget === "form" && "login-field-shake"
+      )}
+    >
       <CardHeader className="space-y-1">
         <CardTitle className="text-xl tracking-tight">Iniciar sesión</CardTitle>
         <CardDescription>
@@ -90,35 +178,60 @@ export function LoginForm({ redirectTo, errorCodigo }: Props) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {errorMsg ? (
-          <p
-            className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-            role="alert"
+        <p aria-live="assertive" className="sr-only">
+          {a11yMessage ?? ""}
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <div
+            className={cn(
+              "space-y-2",
+              shakeTarget === "email" && "login-field-shake"
+            )}
           >
-            {errorMsg}
-          </p>
-        ) : null}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Correo</Label>
+            <Label
+              htmlFor="email"
+              className={cn(emailError && "text-destructive font-medium")}
+            >
+              Correo
+            </Label>
             <Input
               id="email"
-              type="email"
+              type="text"
+              inputMode="email"
               autoComplete="email"
+              spellCheck={false}
               value={email}
-              onChange={(ev) => setEmail(ev.target.value)}
-              required
+              aria-invalid={emailError}
+              className={cn(emailError && "login-input-error")}
+              onChange={(ev) => {
+                setEmail(ev.target.value);
+                if (emailError) setEmailError(false);
+              }}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Contraseña</Label>
+          <div
+            className={cn(
+              "space-y-2",
+              shakeTarget === "password" && "login-field-shake"
+            )}
+          >
+            <Label
+              htmlFor="password"
+              className={cn(passwordError && "text-destructive font-medium")}
+            >
+              Contraseña
+            </Label>
             <Input
               id="password"
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(ev) => setPassword(ev.target.value)}
-              required
+              aria-invalid={passwordError}
+              className={cn(passwordError && "login-input-error")}
+              onChange={(ev) => {
+                setPassword(ev.target.value);
+                if (passwordError) setPasswordError(false);
+              }}
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
@@ -126,13 +239,6 @@ export function LoginForm({ redirectTo, errorCodigo }: Props) {
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="text-xs text-muted-foreground flex-col gap-2 items-start">
-        <span>
-          El alta de usuarios la realiza normalmente quien tiene rol de administración general.
-          Si no puedes iniciar sesión pero tu cuenta existe, revisa con esa persona tu
-          rol y posta.
-        </span>
-      </CardFooter>
     </Card>
   );
 }

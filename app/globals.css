@@ -46,6 +46,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-shake: shake 0.42s ease-in-out;
 }
 
 :root {
@@ -139,4 +140,43 @@
     opacity: 1;
     transform: scale(1.1);
   }
+}
+
+@keyframes login-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  18% {
+    transform: translateX(-6px);
+  }
+  36% {
+    transform: translateX(6px);
+  }
+  54% {
+    transform: translateX(-5px);
+  }
+  72% {
+    transform: translateX(5px);
+  }
+  90% {
+    transform: translateX(-3px);
+  }
+}
+
+/* Login: feedback visual sin depender de utilidades Tailwind purgadas */
+.login-field-shake {
+  animation: login-shake 0.48s ease-in-out;
+}
+
+.login-input-error {
+  border-color: var(--destructive) !important;
+  background-color: color-mix(in oklch, var(--destructive) 10%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--destructive) 28%, transparent) !important;
+}
+
+.login-card-error {
+  border-color: var(--destructive) !important;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--destructive) 35%, transparent);
+  animation: login-shake 0.48s ease-in-out;
 }
