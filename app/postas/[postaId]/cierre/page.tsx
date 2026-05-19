@@ -17,8 +17,6 @@ import {
 } from "@/lib/auth/session";
 import {
   anioMesActual,
-  diasEnMes,
-  mesSiguiente,
   permiteCierreMensualCalendarioOperacion,
   rangoFechasMesISO,
 } from "@/lib/domain/fecha-mes";
@@ -192,18 +190,8 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
     ).length,
   };
 
-  const ultimoDiaNum = diasEnMes(anio, mes);
   const puedeCerrarSegunCalendario =
     !cierre && puedeCerrar && permiteCierreMensualCalendarioOperacion(anio, mes);
-  const siguiente = mesSiguiente(anio, mes);
-  const nombreMesCierre = new Date(anio, mes - 1, 1).toLocaleDateString("es-CL", {
-    month: "long",
-  });
-  const nombreMesSiguiente = new Date(siguiente.anio, siguiente.mes - 1, 1).toLocaleDateString(
-    "es-CL",
-    { month: "long" }
-  );
-  const etiquetaVentanaCierre = `${ultimoDiaNum} de ${nombreMesCierre} al 3 de ${nombreMesSiguiente}`;
 
   return (
     <div className="space-y-6">
@@ -278,8 +266,7 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
                   />
                   {!puedeCerrarSegunCalendario ? (
                     <p className="text-xs text-muted-foreground">
-                      Puedes cerrar entre el último día del mes y el 3 del siguiente (Chile). Ej.:{" "}
-                      {etiquetaVentanaCierre}.
+                      Solo se puede cerrar el mes el último día hábil.
                     </p>
                   ) : null}
                 </div>

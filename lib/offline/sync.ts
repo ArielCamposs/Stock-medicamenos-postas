@@ -2,8 +2,6 @@ import {
   canReachServer,
   fetchWithTimeout,
   isAbortOrNetwork,
-  markServerReachable,
-  markServerUnreachable,
 } from "@/lib/offline/connectivity";
 import {
   deleteMovement,
@@ -46,7 +44,6 @@ async function ensureReachable(): Promise<boolean> {
 
 export async function syncPendingMovements(postaId: string): Promise<SyncPendingResult> {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    markServerUnreachable();
     const pending = await getPendingMovements(postaId);
     return offlineResult(pending.length);
   }
@@ -60,7 +57,6 @@ export async function syncPendingMovements(postaId: string): Promise<SyncPending
   }
 
   if (!(await ensureReachable())) {
-    markServerUnreachable();
     return offlineResult(pending.length);
   }
 
@@ -135,7 +131,6 @@ export async function syncPendingMovements(postaId: string): Promise<SyncPending
     }
 
     await pruneSyncedMovements();
-    markServerReachable();
 
     return {
       ok: failed === 0,
@@ -146,7 +141,6 @@ export async function syncPendingMovements(postaId: string): Promise<SyncPending
     };
   } catch (err) {
     if (isAbortOrNetwork(err)) {
-      markServerUnreachable();
       return offlineResult(pending.length);
     }
     const message = err instanceof Error ? err.message : "Error desconocido.";

@@ -815,7 +815,7 @@ export async function cerrarMesPostaAction(
   if (!permiteCierreMensualCalendarioOperacion(anio, mes)) {
     return {
       error:
-        "El cierre solo se permite desde el último día del mes hasta el día 3 del mes siguiente (hora Chile).",
+        "Solo se puede cerrar el mes el último día hábil.",
     };
   }
 

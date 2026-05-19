@@ -5,7 +5,6 @@ import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -33,11 +32,6 @@ export default async function AdminDashboardPage() {
   const [anioStockStr, mesStockStr] = hoy.split("-");
   const anioStock = Number(anioStockStr);
   const mesStock = Number(mesStockStr);
-  const etiquetaMesStock = new Date(anioStock, mesStock - 1, 1).toLocaleDateString(
-    "es-CL",
-    { month: "long", year: "numeric" }
-  );
-
   const [{ data: listaPostas }, { count: nMedicamentosActivos }, { data: medsActivos }] =
     await Promise.all([
       supabase
@@ -311,12 +305,6 @@ export default async function AdminDashboardPage() {
             </div>
             <div className="min-w-0">
               <CardTitle className="text-lg">Stock bajo o cerca del crítico</CardTitle>
-              <CardDescription className="mt-1 max-w-2xl text-pretty">
-                Mes <span className="font-medium capitalize">{etiquetaMesStock}</span>. Se
-                compara el disponible según el registro del mes (cierre anterior + ingresos −
-                descuentos) con el umbral crítico de cada medicamento. Las filas van de la
-                peor situación a la más holgada.
-              </CardDescription>
             </div>
           </div>
         </CardHeader>

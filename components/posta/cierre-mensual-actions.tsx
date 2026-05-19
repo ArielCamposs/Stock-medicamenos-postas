@@ -21,7 +21,7 @@ export function CerrarMesButton({
   postaId: string;
   anio: number;
   mes: number;
-  /** Solo `true` en la ventana: último día del mes + días 1–3 del mes siguiente (Chile); validación en servidor. */
+  /** Solo `true` en la ventana de cierre; validación en servidor. */
   habilitado: boolean;
 }) {
   const router = useRouter();

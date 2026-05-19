@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { signOutAction } from "@/app/actions/auth";
 import { DismissibleBanner } from "@/components/posta/dismissible-banner";
 import { PwaInstallHint } from "@/components/posta/pwa-install-hint";
-import { PostaNavbarConnectionStatus } from "@/components/posta/posta-navbar-connection-status";
 import { PostaSyncBadge } from "@/components/posta/posta-sync-badge";
 import { PostaPerfilOfflineSync } from "@/components/posta/posta-perfil-offline-sync";
 import { PostaSubnav } from "@/components/posta/posta-subnav";
@@ -74,7 +73,6 @@ export default async function PostaLayout({ children, params }: Props) {
                     </span>
                   ) : null}
                 </Link>
-                <PostaNavbarConnectionStatus />
                 <PostaSyncBadge postaId={postaId} />
               </div>
               {enlaceAdmin ? (

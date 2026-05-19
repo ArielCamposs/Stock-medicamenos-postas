@@ -96,40 +96,6 @@ export function anioMesCalendarioOperacion(ref: Date = new Date()) {
   return { anio: Number(m[1]), mes: Number(m[2]) };
 }
 
-/**
- * Ventana para cerrar el mes contable `(anio, mes)` según fecha «hoy» en {@link ZONA_CALENDARIO_OPERACION}:
- * - último día calendario de ese mes, o
- * - días 1, 2 y 3 del mes siguiente (por si se atrasa el cierre).
- * No se permite cerrar antes del último día del mes.
- */
-export function permiteCierreMensualCalendarioOperacion(
-  anio: number,
-  mes: number,
-  ref: Date = new Date()
-): boolean {
-  const hoy = fechaCalendarioEnZonaIANA(ZONA_CALENDARIO_OPERACION, ref);
-  const ultimoDia = diasEnMes(anio, mes);
-  if (hoy === fechaISOEnMes(anio, mes, ultimoDia)) {
-    return true;
-  }
-
-  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(hoy);
-  if (!partes) return false;
-  const yHoy = Number(partes[1]);
-  const mHoy = Number(partes[2]);
-  const dHoy = Number(partes[3]);
-  if (!Number.isFinite(yHoy) || !Number.isFinite(mHoy) || !Number.isFinite(dHoy)) {
-    return false;
-  }
-
-  const sig = mesSiguiente(anio, mes);
-  if (yHoy === sig.anio && mHoy === sig.mes && dHoy >= 1 && dHoy <= 3) {
-    return true;
-  }
-
-  return false;
-}
-
 const RE_MES_YYYY_MM = /^\d{4}-\d{2}$/;
 
 /**
@@ -183,3 +149,5 @@ export function etiquetaInstanteChile24h(iso: string): string {
   }).format(new Date(ms));
   return s.replace("T", " ").replace(",", " ");
 }
+
+export { permiteCierreMensualCalendarioOperacion } from "@/lib/domain/dias-habiles-chile";

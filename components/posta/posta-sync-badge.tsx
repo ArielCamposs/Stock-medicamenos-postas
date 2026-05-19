@@ -1,10 +1,8 @@
 "use client";
 
-import { CloudOff } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { getErrorMovements, getPendingMovements } from "@/lib/offline/db";
-import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -13,7 +11,6 @@ type Props = {
 };
 
 export function PostaSyncBadge({ postaId, className }: Props) {
-  const online = useOnlineStatus();
   const [pending, setPending] = useState(0);
   const [errors, setErrors] = useState(0);
 
@@ -47,9 +44,8 @@ export function PostaSyncBadge({ postaId, className }: Props) {
   const total = pending + errors;
   if (total === 0) return null;
 
-  const titulo = !online
-    ? `${pending} descuento(s) pendiente(s) de enviar cuando vuelva internet.`
-    : errors > 0
+  const titulo =
+    errors > 0
       ? `${pending} pendiente(s), ${errors} con error. Revisa Descuento.`
       : `${pending} descuento(s) por sincronizar.`;
 
@@ -64,7 +60,6 @@ export function PostaSyncBadge({ postaId, className }: Props) {
       )}
       title={titulo}
     >
-      {!online ? <CloudOff className="size-3 shrink-0" aria-hidden /> : null}
       <span aria-hidden>{total}</span>
       <span className="sr-only">{titulo}</span>
     </span>

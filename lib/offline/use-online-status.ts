@@ -2,20 +2,28 @@
 
 import { useSyncExternalStore } from "react";
 
-import {
-  getConnectivityServerSnapshot,
-  getConnectivitySnapshot,
-  subscribeConnectivity,
-} from "@/lib/offline/connectivity";
+function subscribeOnlineStatus(onStoreChange: () => void) {
+  window.addEventListener("online", onStoreChange);
+  window.addEventListener("offline", onStoreChange);
+  return () => {
+    window.removeEventListener("online", onStoreChange);
+    window.removeEventListener("offline", onStoreChange);
+  };
+}
 
-/**
- * Estado de red para la UI: `navigator.onLine` + sondeo al servidor
- * (detecta WiFi sin internet; en localhost también prueba Supabase).
- */
+function getOnlineSnapshot() {
+  return navigator.onLine;
+}
+
+function getOnlineServerSnapshot() {
+  return true;
+}
+
+/** Solo para lógica interna (copia local, modal); no muestra indicador en la UI. */
 export function useOnlineStatus() {
   return useSyncExternalStore(
-    subscribeConnectivity,
-    getConnectivitySnapshot,
-    getConnectivityServerSnapshot
+    subscribeOnlineStatus,
+    getOnlineSnapshot,
+    getOnlineServerSnapshot
   );
 }

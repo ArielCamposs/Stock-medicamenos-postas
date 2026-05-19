@@ -250,10 +250,9 @@ export function PedidoMensualPanel({
         <CardHeader className="border-b bg-muted/40">
           <CardTitle className="text-lg">Líneas y stock</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            El disponible viene del registro del mes. La columna{" "}
-            <strong className="text-foreground">Sugerida</strong> es{" "}
-            <span className="font-mono text-xs">max(0, stock ref. − disponible)</span>. Ajusta la columna{" "}
+            El disponible viene del registro del mes. Ajusta la columna{" "}
             <strong className="text-foreground">Pedido</strong> y envía a administración cuando esté listo.
+            Sólo puedes enviar <strong className="text-foreground">UN PEDIDO</strong> por mes.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {estado ? (
