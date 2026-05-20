@@ -1,12 +1,12 @@
 "use client";
 
 import {
+  Archive,
+  CalendarCheck,
   ClipboardList,
   LayoutDashboard,
   Lock,
   PackagePlus,
-  Pill,
-  Warehouse,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -14,13 +14,13 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const LINKS: { segment: string; label: string; Icon: LucideIcon }[] = [
-  { segment: "dashboard", label: "Inicio", Icon: LayoutDashboard },
-  { segment: "descuento", label: "Descuento", Icon: Pill },
-  { segment: "ingresos", label: "Ingresos", Icon: PackagePlus },
-  { segment: "avis", label: "Stock AVIS", Icon: Warehouse },
-  { segment: "pedidos", label: "Pedidos", Icon: ClipboardList },
-  { segment: "cierre", label: "Cierre", Icon: Lock },
+const LINKS: { segment: string; label: string; Icon: LucideIcon; description: string }[] = [
+  { segment: "dashboard", label: "Inicio", Icon: LayoutDashboard, description: "Resumen de stock" },
+  { segment: "descuento", label: "Consumo diario", Icon: CalendarCheck, description: "Registrar consumo del día" },
+  { segment: "ingresos", label: "Entradas de stock", Icon: PackagePlus, description: "Registrar nuevos ingresos" },
+  { segment: "avis", label: "Conteo AVIS", Icon: Archive, description: "Declarar stock físico" },
+  { segment: "pedidos", label: "Pedido mensual", Icon: ClipboardList, description: "Solicitud de reposición" },
+  { segment: "cierre", label: "Cierre del mes", Icon: Lock, description: "Cerrar el período" },
 ];
 
 export function PostaSubnav({ postaId }: { postaId: string }) {
@@ -29,10 +29,10 @@ export function PostaSubnav({ postaId }: { postaId: string }) {
 
   return (
     <nav
-      className="-mx-1 flex gap-1 overflow-x-auto pb-0.5 pt-1 scrollbar-thin"
+      className="-mx-1 flex gap-0.5 overflow-x-auto pb-0.5 pt-1 scrollbar-thin"
       aria-label="Secciones de la posta"
     >
-      {LINKS.map(({ segment, label, Icon }) => {
+      {LINKS.map(({ segment, label, Icon, description }) => {
         const href = `${base}/${segment}`;
         const active =
           segment === "dashboard"
@@ -42,15 +42,20 @@ export function PostaSubnav({ postaId }: { postaId: string }) {
           <Link
             key={segment}
             href={href}
+            title={description}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+              "inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
               active
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "bg-primary/10 text-primary border border-primary/20 shadow-sm"
+                : "text-muted-foreground hover:bg-muted/80 hover:text-foreground border border-transparent"
             )}
           >
-            <Icon className="size-3.5 shrink-0 opacity-90" aria-hidden />
-            <span>{label}</span>
+            <Icon
+              className={cn("size-4 shrink-0", active ? "text-primary" : "opacity-70")}
+              aria-hidden
+            />
+            <span className="hidden sm:inline">{label}</span>
+            <span className="sm:hidden">{label.split(" ")[0]}</span>
           </Link>
         );
       })}

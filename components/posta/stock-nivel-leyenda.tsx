@@ -27,21 +27,20 @@ export function StockNivelLeyenda({ className, compact }: Props) {
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground",
+        "flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground",
         className
       )}
       role="note"
       aria-label="Leyenda de colores de stock"
     >
-      {!compact ? <span className="font-medium text-foreground">Leyenda:</span> : null}
+      {!compact ? <span className="font-medium text-foreground mr-1">Leyenda:</span> : null}
       {items.map((item) => (
-        <span key={item.label} className="inline-flex items-center gap-1.5">
+        <span 
+          key={item.label} 
+          className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground bg-muted/40 border border-border/50 px-2 py-0.5 rounded-full"
+        >
           <span
-            className={cn("h-3 w-1 rounded-full", item.bar)}
-            aria-hidden
-          />
-          <span
-            className={cn("hidden h-3 w-3 rounded border border-border/60 sm:inline-block", item.cell)}
+            className={cn("h-1.5 w-1.5 rounded-full", item.bar)}
             aria-hidden
           />
           {item.label}

@@ -22,6 +22,21 @@ type Props = {
   params: Promise<{ postaId: string }>;
 };
 
+function etiquetaRol(rol: string): string {
+  const mapa: Record<string, string> = {
+    encargado_posta: "Encargada/o",
+    admin_general: "Administración",
+    supervision_posta: "Supervisión",
+  };
+  return mapa[rol] ?? rol.replaceAll("_", " ");
+}
+
+function abreviarEmail(email: string | null | undefined, id: string): string {
+  if (!email) return id.slice(0, 8);
+  const at = email.indexOf("@");
+  return at > 0 ? email.slice(0, at) : email;
+}
+
 export default async function PostaLayout({ children, params }: Props) {
   const { postaId } = await params;
   const { profile } = await requirePerfilUsuario();
@@ -51,6 +66,9 @@ export default async function PostaLayout({ children, params }: Props) {
   const supervision = esSoloSupervisionPosta(profile);
   const adminEnPosta = esAdminGeneral(profile);
   const enlaceAdmin = tieneAccesoGlobalAdmin(profile);
+
+  const nombreUsuario = abreviarEmail(profile.email, profile.id);
+  const rolEtiqueta = etiquetaRol(profile.rol);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -84,16 +102,24 @@ export default async function PostaLayout({ children, params }: Props) {
                 </Link>
               ) : null}
             </nav>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              <span className="max-w-[16rem] truncate sm:max-w-xs">
-                {profile.email ?? profile.id}
-                <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                  {profile.rol.replaceAll("_", " ")}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-[11px] uppercase">
+                  {nombreUsuario.slice(0, 2)}
+                </div>
+                <div className="hidden sm:block">
+                  <p className="font-medium text-foreground leading-tight max-w-[14rem] truncate">
+                    {nombreUsuario}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{rolEtiqueta}</p>
+                </div>
+                <span className="sm:hidden rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-medium">
+                  {rolEtiqueta}
                 </span>
-              </span>
+              </div>
               <form action={signOutAction}>
                 <Button type="submit" variant="outline" size="sm">
-                  Cerrar sesión
+                  Salir
                 </Button>
               </form>
             </div>

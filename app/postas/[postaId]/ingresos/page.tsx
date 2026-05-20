@@ -1,3 +1,4 @@
+import { PackagePlus, History, Lock } from "lucide-react";
 import { PostaMesToolbar, tituloMesChile } from "@/components/posta/posta-mes-toolbar";
 import { PostaPageHeader } from "@/components/posta/posta-page-header";
 import {
@@ -10,6 +11,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import {
   puedeRegistrarStockYAvisPosta,
@@ -143,28 +145,34 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
   return (
     <div className="space-y-6">
       <PostaPageHeader
-        title="Ingresos de stock"
+        title="Entradas de stock"
         description={
           puedeRegistrar
-            ? "Registra entradas del mes seleccionado."
+            ? "Registra aquí los medicamentos que ingresaron a la posta este mes."
             : cierre
-              ? "Mes cerrado. Solicita reapertura antes de registrar o corregir ingresos."
-              : "Solo lectura."
+              ? "El mes está cerrado. Para registrar o corregir ingresos, solicita la reapertura del período."
+              : "No tienes permiso para registrar ingresos en este período."
         }
       />
 
       <PostaMesToolbar basePath={basePath} anio={anio} mes={mes} />
 
-      <p className="text-center font-heading text-lg font-semibold capitalize text-foreground">
-        {tituloMesChile(anio, mes)}
-      </p>
-
       {puedeRegistrar ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Nuevo ingreso</CardTitle>
+        <Card className="border-primary/20 shadow-sm">
+          <CardHeader className="border-b border-border/60 bg-primary/5 pb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <PackagePlus className="size-4" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Nuevo ingreso de stock</CardTitle>
+                <CardDescription className="text-xs mt-0.5">
+                  {tituloMesChile(anio, mes)} · {meds.length} medicamentos disponibles
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-5">
             <IngresoStockLoteForm
               postaId={postaId}
               medicamentos={meds}
@@ -174,18 +182,40 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-dashed">
-          <CardHeader>
-            <CardTitle className="text-base">Sin permiso de carga</CardTitle>
-          </CardHeader>
-        </Card>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 dark:bg-amber-950/20 p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 mt-0.5">
+              <Lock className="size-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-amber-800 dark:text-amber-300">
+                {cierre ? "Período cerrado" : "Sin permiso de carga"}
+              </h3>
+              <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+                {cierre
+                  ? `El mes de ${tituloMesChile(anio, mes)} ya fue cerrado. Los movimientos de este período están bloqueados. Si necesitas corregir algo, solicita la reapertura del período a administración.`
+                  : "Tu perfil de usuario no tiene permiso para registrar entradas de stock. Contacta al administrador si crees que esto es un error."}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Últimos ingresos</CardTitle>
+        <CardHeader className="border-b border-border/60 bg-muted/30 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <History className="size-4" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Historial de ingresos</CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Últimos 40 registros · ordenados por fecha
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <UltimosIngresosTabla postaId={postaId} puedeRegistrar={puedeRegistrar} rows={rows} />
         </CardContent>
       </Card>

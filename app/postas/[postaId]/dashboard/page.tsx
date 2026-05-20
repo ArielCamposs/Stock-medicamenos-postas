@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Fragment } from "react";
+import { Package, AlertTriangle, TrendingUp, Activity, BarChart2, ArrowLeft } from "lucide-react";
 
 import { StockNivelLeyenda } from "@/components/posta/stock-nivel-leyenda";
 import { buttonVariants } from "@/components/ui/button";
@@ -236,218 +237,297 @@ export default async function PostaDashboardPage({ params }: PageProps) {
       title: "Unidades disponibles (estimado)",
       value: sumDisponible.toLocaleString("es-CL"),
       hint: `Stock según registro · ${etiquetaMes}`,
+      icon: Activity,
+      color: "primary",
     },
     {
       title: "Bajo stock crítico",
       value: nCritico.toLocaleString("es-CL"),
       hint: "Medicamentos en o bajo el mínimo",
+      icon: AlertTriangle,
+      color: "destructive",
+      count: nCritico,
     },
     {
       title: "Cerca del mínimo",
       value: nCerca.toLocaleString("es-CL"),
       hint: "Es recomendable revisarlos pronto",
+      icon: TrendingUp,
+      color: "amber",
+      count: nCerca,
     },
     {
       title: "Medicamentos en catálogo",
       value: nCatalogo.toLocaleString("es-CL"),
       hint: "Activos en el sistema",
+      icon: Package,
+      color: "info",
     },
   ];
 
+  const estadoSedeBadge = nCritico > 0 ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 border border-destructive/20 px-2.5 py-1 text-xs font-semibold text-destructive animate-pulse">
+      <span className="size-1.5 rounded-full bg-destructive" />
+      Reabastecimiento urgente
+    </span>
+  ) : nCerca > 0 ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400">
+      <span className="size-1.5 rounded-full bg-amber-500" />
+      Stock bajo en revisión
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+      <span className="size-1.5 rounded-full bg-emerald-500" />
+      Niveles estables
+    </span>
+  );
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Resumen del mes
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          {puedeRegistrarDescuentos ? (
-            <>
-              Cifras del mes calendario <span className="font-medium">{etiquetaMes}</span>{" "}
-              según el registro del mes (cierre anterior + ingresos − descuentos). El detalle día a
-              día está en{" "}
-              <Link className="underline underline-offset-4" href={descuentoMesHref}>
-                Descuento
-              </Link>
-              .
-            </>
-          ) : puedeRegistrarIngresosYAvis ? (
-            <>
-              Puede cargar ingresos y declarar stock AVIS; el descuento diario lo registra
-              el encargado. Mes en pantalla:{" "}
-              <span className="font-medium">{etiquetaMes}</span>.
-            </>
-          ) : (
-            <>
-              Solo lectura. Stock del mes{" "}
-              <span className="font-medium">{etiquetaMes}</span> según el registro de la
-              posta.
-            </>
-          )}
-        </p>
+    <div className="space-y-8 animate-fade-in">
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-tr from-primary/5 via-card to-card p-6 shadow-sm">
+        <div className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/5 blur-3xl" />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
+              Resumen mensual de stock
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              {puedeRegistrarDescuentos ? (
+                <>
+                  Cifras del mes calendario <span className="font-semibold text-foreground">{etiquetaMes}</span>{" "}
+                  según el registro del mes (cierre anterior + ingresos − descuentos). El detalle día a
+                  día está en{" "}
+                  <Link className="underline underline-offset-4 hover:text-primary transition-colors" href={descuentoMesHref}>
+                    Descuento
+                  </Link>
+                  .
+                </>
+              ) : puedeRegistrarIngresosYAvis ? (
+                <>
+                  Puede cargar ingresos y declarar stock AVIS; el descuento diario lo registra
+                  el encargado. Mes en pantalla:{" "}
+                  <span className="font-semibold text-foreground">{etiquetaMes}</span>.
+                </>
+              ) : (
+                <>
+                  Solo lectura. Stock del mes{" "}
+                  <span className="font-semibold text-foreground">{etiquetaMes}</span> según el registro de la
+                  posta.
+                </>
+              )}
+            </p>
+          </div>
+          <div className="shrink-0">
+            {estadoSedeBadge}
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {cards.map((c) => (
-          <Card key={c.title} size="sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">{c.title}</CardTitle>
-              <CardDescription>{c.hint}</CardDescription>
-            </CardHeader>
-            <div className="px-4 pb-4">
-              <p className="font-heading text-3xl font-semibold tabular-nums">
-                {c.value}
-              </p>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map((c) => {
+          const Icon = c.icon;
+          const isCritical = c.color === "destructive" && c.count && c.count > 0;
+          const isWarning = c.color === "amber" && c.count && c.count > 0;
+          
+          let cardBgClass = "bg-card border-border/80 hover:border-border hover:shadow-sm";
+          let iconWrapperClass = "bg-muted text-muted-foreground";
+          let valueClass = "text-foreground";
+          
+          if (c.color === "primary") {
+            iconWrapperClass = "bg-sky-500/10 text-sky-600 dark:text-sky-400";
+            valueClass = "text-sky-700 dark:text-sky-400";
+          } else if (c.color === "destructive") {
+            if (isCritical) {
+              cardBgClass = "bg-card border-rose-500/30 hover:border-rose-500/45 hover:shadow-sm";
+              iconWrapperClass = "bg-rose-500/15 text-rose-600 dark:text-rose-400 animate-pulse";
+              valueClass = "text-rose-600 dark:text-rose-400";
+            } else {
+              iconWrapperClass = "bg-muted/80 text-muted-foreground/60";
+              valueClass = "text-muted-foreground/50";
+            }
+          } else if (c.color === "amber") {
+            if (isWarning) {
+              cardBgClass = "bg-card border-amber-500/30 hover:border-amber-500/45 hover:shadow-sm";
+              iconWrapperClass = "bg-amber-500/15 text-amber-600 dark:text-amber-400";
+              valueClass = "text-amber-600 dark:text-amber-400";
+            } else {
+              iconWrapperClass = "bg-muted/80 text-muted-foreground/60";
+              valueClass = "text-muted-foreground/50";
+            }
+          } else if (c.color === "info") {
+            iconWrapperClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+            valueClass = "text-emerald-700 dark:text-emerald-400";
+          }
+
+          return (
+            <Card 
+              key={c.title} 
+              size="sm" 
+              className={cn(
+                "overflow-hidden border transition-all duration-200 shadow-sm p-4.5 flex flex-col justify-between hover:shadow",
+                cardBgClass
+              )}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">{c.title}</p>
+                  <p className="text-[10px] text-muted-foreground/80 leading-normal">{c.hint}</p>
+                </div>
+                <div className={cn("p-2 rounded-lg shrink-0", iconWrapperClass)}>
+                  <Icon className="size-4.5" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <p className={cn("font-heading text-3xl font-bold tracking-tight tabular-nums", valueClass)}>
+                  {c.value}
+                </p>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card size="sm" className="border border-border/80 shadow-sm bg-card/40 backdrop-blur-sm overflow-hidden">
+        <CardHeader className="border-b border-border/60 bg-muted/20 px-6 py-4.5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <BarChart2 className="size-4.5 text-primary" />
+                Stock posta por medicamento
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-1">
+                Stock final según el cierre anterior, descontando consumos y sumando ingresos del mes.
+              </CardDescription>
             </div>
-          </Card>
-        ))}
-      </div>
-
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle className="text-base">Stock posta por medicamento</CardTitle>
-          <CardDescription>
-            <span className="block">
-              <strong>Si no existen registros, se muestra "-", "0".{" "}</strong>
-            </span>
-            <StockNivelLeyenda className="mt-3" compact />
-          </CardDescription>
+            <StockNivelLeyenda className="shrink-0" compact />
+          </div>
         </CardHeader>
-        <div className="px-4 pb-4">
+        <div className="p-0">
           {filasStock.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="p-6 text-sm text-muted-foreground">
               No hay medicamentos activos en el catálogo.
             </p>
           ) : (
-            <div className="max-h-[min(70vh,32rem)] overflow-auto rounded-md border">
-              <table className="w-full min-w-[38rem] text-left text-sm">
-                <thead className="sticky top-0 z-10 border-b bg-muted/95 backdrop-blur-sm text-xs font-medium text-muted-foreground">
+            <div className="max-h-[min(70vh,36rem)] overflow-auto">
+              <table className="w-full min-w-[38rem] text-left text-sm border-collapse">
+                <thead className="sticky top-0 z-20 border-b border-border/60 bg-muted/90 backdrop-blur-sm text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   <tr>
-                    <th className="px-3 py-2">Medicamento</th>
-                    <th className="px-3 py-2 text-right tabular-nums">Stock posta</th>
-                    <th className="px-3 py-2 text-right tabular-nums">Mín. crítico</th>
-                    <th className="px-3 py-2 text-right tabular-nums">Disponible</th>
-                    <th className="px-3 py-2 text-right tabular-nums">AVIS</th>
-                    <th className="hidden w-[1%] whitespace-nowrap px-3 py-2 sm:table-cell">
-                      Estado
-                    </th>
+                    <th className="px-5 py-3">Medicamento</th>
+                    <th className="px-5 py-3 text-right">Stock Inicial</th>
+                    <th className="px-5 py-3 text-right">Mín. Crítico</th>
+                    <th className="px-5 py-3 text-right">Disponible</th>
+                    <th className="px-5 py-3 text-center">Nivel de Stock</th>
+                    <th className="px-5 py-3 text-right">AVIS</th>
+                    <th className="px-5 py-3 text-right">Estado</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border/40">
                   {MEDICAMENTO_CATEGORIAS.map((cat) => {
                     const rows = filasStock.filter((f) => f.categoria === cat);
                     if (rows.length === 0) return null;
+                    const itemsCount = rows.length;
                     return (
                       <Fragment key={cat}>
-                        <tr className="border-b border-border bg-muted/85">
-                          <td
-                            colSpan={6}
-                            className="px-3 py-2 text-xs font-semibold tracking-wide text-foreground"
-                          >
-                            {etiquetaMedicamentoCategoria[cat]}
+                        <tr className="border-b border-border bg-muted/50">
+                          <td colSpan={7} className="px-5 py-2.5 bg-muted/10">
+                            <div className="flex items-center justify-between text-xs font-bold tracking-wider text-muted-foreground uppercase">
+                              <span>{etiquetaMedicamentoCategoria[cat]}</span>
+                              <span className="font-mono text-[10px] font-semibold text-muted-foreground/80 bg-muted/95 px-2 py-0.5 rounded-full border border-border/60 normal-case tracking-normal">
+                                {itemsCount} {itemsCount === 1 ? "ítem" : "ítems"}
+                              </span>
+                            </div>
                           </td>
                         </tr>
                         {rows.map((f) => {
-                          const rowBg =
+                          const maxVal = Math.max(f.stockRec, f.disponible, 1);
+                          const pct = Math.min(100, Math.round((f.disponible / maxVal) * 100));
+                          const critPct = Math.min(95, Math.max(5, Math.round((f.stockCrit / maxVal) * 100)));
+                          const colorBarra = 
                             f.tono === "alerta"
-                              ? f.nivel === "critico"
-                                ? "bg-destructive/16 dark:bg-destructive/22"
-                                : "bg-destructive/9 dark:bg-destructive/14"
+                              ? "bg-destructive"
                               : f.tono === "regular"
-                                ? "bg-amber-400/16 dark:bg-amber-500/12"
-                                : "bg-emerald-500/11 dark:bg-emerald-500/10";
-                          const bordeIzq =
-                            f.tono === "alerta"
-                              ? "border-l-4 border-l-destructive"
-                              : f.tono === "regular"
-                                ? "border-l-4 border-l-amber-500"
-                                : "border-l-4 border-l-emerald-600";
+                                ? "bg-amber-500"
+                                : "bg-emerald-500";
                           const claseDisponible =
                             f.tono === "alerta"
-                              ? "text-destructive"
+                              ? "text-destructive font-bold"
                               : f.tono === "regular"
-                                ? "text-amber-950 dark:text-amber-100"
-                                : "text-emerald-900 dark:text-emerald-100";
+                                ? "text-amber-600 dark:text-amber-400 font-semibold"
+                                : "text-emerald-600 dark:text-emerald-400 font-semibold";
                           return (
                             <tr
                               key={f.id}
-                              className="border-b border-border/60 last:border-0"
+                              className="hover:bg-muted/25 transition-colors duration-150"
                             >
                               <td
                                 className={cn(
-                                  "px-3 py-2 font-medium",
-                                  rowBg,
-                                  bordeIzq
+                                  "px-5 py-3.5 font-semibold text-foreground border-l-4",
+                                  f.tono === "alerta"
+                                    ? "border-l-destructive"
+                                    : f.tono === "regular"
+                                      ? "border-l-amber-500"
+                                      : "border-l-emerald-500"
                                 )}
                               >
                                 {f.nombre}
                                 {f.unidad ? (
-                                  <span className="ml-1 font-normal text-muted-foreground">
+                                  <span className="ml-1.5 font-normal text-xs text-muted-foreground">
                                     ({f.unidad})
                                   </span>
                                 ) : null}
                               </td>
-                              <td
-                                className={cn(
-                                  "px-3 py-2 text-right tabular-nums",
-                                  rowBg
-                                )}
-                              >
+                              <td className="px-5 py-3.5 text-right tabular-nums text-muted-foreground">
                                 {f.stockFichaMes === null
                                   ? "—"
                                   : f.stockFichaMes.toLocaleString("es-CL")}
                               </td>
-                              <td
-                                className={cn(
-                                  "px-3 py-2 text-right tabular-nums text-muted-foreground",
-                                  rowBg
-                                )}
-                              >
+                              <td className="px-5 py-3.5 text-right tabular-nums text-muted-foreground/70 text-xs">
                                 {f.stockCrit.toLocaleString("es-CL")}
                               </td>
-                              <td
-                                className={cn(
-                                  "px-3 py-2 text-right font-medium tabular-nums",
-                                  rowBg,
-                                  claseDisponible
-                                )}
-                              >
+                              <td className={cn("px-5 py-3.5 text-right tabular-nums", claseDisponible)}>
                                 {f.disponible.toLocaleString("es-CL")}
                               </td>
-                              <td
-                                className={cn(
-                                  "px-3 py-2 text-right font-medium tabular-nums text-sky-900 dark:text-sky-100",
-                                  rowBg
-                                )}
-                              >
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center justify-center gap-2.5">
+                                  <div className="relative h-2.5 w-24 rounded-full bg-muted overflow-hidden shrink-0 border border-border/20">
+                                    <div 
+                                      className={cn("h-full rounded-full transition-all duration-300", colorBarra)}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                    {/* Línea divisoria del límite crítico */}
+                                    <div 
+                                      className="absolute top-0 bottom-0 w-0.5 bg-rose-500/80 dark:bg-rose-400/80 z-10"
+                                      style={{ left: `${critPct}%` }}
+                                      title={`Mínimo crítico: ${f.stockCrit}`}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-mono text-muted-foreground/80 w-8 text-right shrink-0">{pct}%</span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5 text-right font-semibold tabular-nums text-sky-600 dark:text-sky-400">
                                 {f.stockAvis.toLocaleString("es-CL")}
                               </td>
-                              <td
-                                className={cn(
-                                  "hidden px-3 py-2 sm:table-cell",
-                                  rowBg
-                                )}
-                              >
+                              <td className="px-5 py-3.5 text-right">
                                 {f.nivel === "critico" ? (
-                                  <Badge variant="destructive">Crítico</Badge>
+                                  <Badge variant="destructive" className="font-bold text-[10px] uppercase tracking-wider px-2 py-0.5">Crítico</Badge>
                                 ) : f.nivel === "cerca" ? (
                                   <Badge
                                     variant="outline"
-                                    className="border-destructive/55 bg-destructive/12 font-medium text-destructive dark:border-destructive/50 dark:bg-destructive/20 dark:text-red-100"
+                                    className="border-destructive/30 bg-destructive/5 font-semibold text-[10px] text-destructive uppercase tracking-wider px-2 py-0.5"
                                   >
-                                    Cerca del mín.
+                                    Bajo
                                   </Badge>
                                 ) : f.tono === "regular" ? (
                                   <Badge
                                     variant="outline"
-                                    className="border-amber-600/45 bg-amber-400/20 font-medium text-amber-950 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-50"
+                                    className="border-amber-600/30 bg-amber-500/5 font-semibold text-[10px] text-amber-700 dark:text-amber-400 uppercase tracking-wider px-2 py-0.5"
                                   >
                                     Regular
                                   </Badge>
                                 ) : (
                                   <Badge
                                     variant="outline"
-                                    className="border-emerald-600/45 bg-emerald-500/15 font-medium text-emerald-950 dark:border-emerald-500/50 dark:bg-emerald-400/12 dark:text-emerald-50"
+                                    className="border-emerald-600/30 bg-emerald-500/5 font-semibold text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider px-2 py-0.5"
                                   >
                                     Bien
                                   </Badge>
@@ -463,10 +543,10 @@ export default async function PostaDashboardPage({ params }: PageProps) {
               </table>
             </div>
           )}
-          <p className="mt-3 text-xs text-muted-foreground">
+          <p className="p-4 text-xs text-muted-foreground border-t border-border/40 bg-muted/5">
             Orden: categoría del catálogo, luego alerta → regular → bien, y dentro de cada
             grupo por menor disponible y nombre. Detalle día a día en{" "}
-            <Link className="underline underline-offset-2" href={descuentoMesHref}>
+            <Link className="underline underline-offset-2 hover:text-primary transition-colors" href={descuentoMesHref}>
               Descuento
             </Link>
             .
@@ -474,42 +554,43 @@ export default async function PostaDashboardPage({ params }: PageProps) {
         </div>
       </Card>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
         <Link
           href={descuentoMesHref}
-          className={cn(buttonVariants({ variant: "default" }), "w-fit")}
+          className={cn(buttonVariants({ variant: "default" }), "w-fit text-xs font-semibold px-4.5 h-10 shadow-sm hover:shadow transition-all")}
         >
           {puedeRegistrarDescuentos ? "Registrar descuento" : "Ver descuento / stock"}
         </Link>
         <Link
           href={`/postas/${postaId}/ingresos`}
-          className={cn(buttonVariants({ variant: "secondary" }), "w-fit")}
+          className={cn(buttonVariants({ variant: "secondary" }), "w-fit text-xs font-semibold px-4.5 h-10 border border-border/80")}
         >
           {puedeRegistrarIngresosYAvis ? "Registrar ingreso" : "Ver ingresos"}
         </Link>
         <Link
           href={`/postas/${postaId}/avis`}
-          className={cn(buttonVariants({ variant: "secondary" }), "w-fit")}
+          className={cn(buttonVariants({ variant: "secondary" }), "w-fit text-xs font-semibold px-4.5 h-10 border border-border/80")}
         >
           Stock AVIS
         </Link>
         <Link
           href={`/postas/${postaId}/pedidos`}
-          className={cn(buttonVariants({ variant: "outline" }), "w-fit")}
+          className={cn(buttonVariants({ variant: "outline" }), "w-fit text-xs font-semibold px-4.5 h-10")}
         >
           Pedido mensual
         </Link>
+        <div className="flex-1 min-w-[2rem]" />
         {verAdmin ? (
           <Link
             href="/admin"
-            className={cn(buttonVariants({ variant: "ghost" }), "w-fit")}
+            className={cn(buttonVariants({ variant: "ghost" }), "w-fit text-xs font-semibold h-10 hover:bg-muted")}
           >
             Panel supervisión
           </Link>
         ) : (
           <Link
             href="/"
-            className={cn(buttonVariants({ variant: "ghost" }), "w-fit")}
+            className={cn(buttonVariants({ variant: "ghost" }), "w-fit text-xs font-semibold h-10 hover:bg-muted")}
           >
             Inicio
           </Link>

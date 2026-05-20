@@ -218,10 +218,30 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
       ) : (
         <>
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">
-                {cierre ? "Mes cerrado" : "Mes abierto"}
-              </CardTitle>
+            <CardHeader className="border-b border-border/60 bg-muted/30 pb-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-lg">
+                    {cierre ? "Cierre del mes" : "Mes en curso"}
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {cierre
+                      ? `Cerrado el ${new Date(cierre.cerradoEn).toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" })}`
+                      : "Mientras el mes esté abierto se pueden registrar y corregir movimientos."}
+                  </p>
+                </div>
+                {cierre ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-muted border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    <span className="size-1.5 rounded-full bg-muted-foreground/50" />
+                    Mes cerrado
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Mes abierto
+                  </span>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {cierre ? (
@@ -239,21 +259,43 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
                 </p>
               )}
               <div className="grid gap-3 text-sm sm:grid-cols-4">
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Stock según registro</p>
-                  <p className="text-xl font-semibold tabular-nums">{resumen.disponible}</p>
+                <div className="rounded-xl border border-sky-500/20 bg-gradient-to-tr from-sky-500/8 via-card to-card p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stock según registro</p>
+                  <p className="text-2xl font-bold tabular-nums text-sky-700 dark:text-sky-400 mt-1">{resumen.disponible}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">unidades totales calculadas</p>
                 </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Stock AVIS</p>
-                  <p className="text-xl font-semibold tabular-nums">{resumen.avis}</p>
+                <div className="rounded-xl border border-sky-500/20 bg-gradient-to-tr from-sky-500/8 via-card to-card p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stock AVIS declarado</p>
+                  <p className="text-2xl font-bold tabular-nums text-sky-700 dark:text-sky-400 mt-1">{resumen.avis}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">unidades contadas físicamente</p>
                 </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Diferencias</p>
-                  <p className="text-xl font-semibold tabular-nums">{resumen.diferencias}</p>
+                <div className={resumen.diferencias > 0
+                  ? "rounded-xl border border-amber-500/30 bg-gradient-to-tr from-amber-500/10 via-card to-card p-4"
+                  : "rounded-xl border border-emerald-500/20 bg-gradient-to-tr from-emerald-500/8 via-card to-card p-4"
+                }>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Diferencias</p>
+                  <p className={`text-2xl font-bold tabular-nums mt-1 ${
+                    resumen.diferencias > 0
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-emerald-700 dark:text-emerald-400"
+                  }`}>{resumen.diferencias}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {resumen.diferencias === 0 ? "Sin diferencias" : "medicamentos con diferencia"}
+                  </p>
                 </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Bajo crítico</p>
-                  <p className="text-xl font-semibold tabular-nums">{resumen.bajoCritico}</p>
+                <div className={resumen.bajoCritico > 0
+                  ? "rounded-xl border border-rose-500/30 bg-gradient-to-tr from-rose-500/10 via-card to-card p-4"
+                  : "rounded-xl border border-emerald-500/20 bg-gradient-to-tr from-emerald-500/8 via-card to-card p-4"
+                }>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bajo nivel crítico</p>
+                  <p className={`text-2xl font-bold tabular-nums mt-1 ${
+                    resumen.bajoCritico > 0
+                      ? "text-rose-600 dark:text-rose-400"
+                      : "text-emerald-700 dark:text-emerald-400"
+                  }`}>{resumen.bajoCritico}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {resumen.bajoCritico === 0 ? "Todo en niveles normales" : "requieren reposición"}
+                  </p>
                 </div>
               </div>
               {!cierre && puedeCerrar ? (
@@ -301,24 +343,53 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
                       </tr>
                     </thead>
                     <tbody>
-                      {filas.map((f) => (
-                        <tr key={f.id} className="border-b border-border/70">
-                          <td className="px-2 py-2">
-                            <span className="font-medium">{f.nombre}</span>
-                            <span className="ml-1 text-xs text-muted-foreground">
-                              ({f.codigo} · {f.unidad})
-                            </span>
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums">{f.cierreAnterior}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{f.ingresoMes}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{f.descuentoMes}</td>
-                          <td className="px-2 py-2 text-right font-medium tabular-nums">
-                            {f.disponible}
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums">{f.stockAvis}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{f.diferenciaAvis}</td>
-                        </tr>
-                      ))}
+                        {filas.map((f) => {
+                          const tieneDiferencia = f.diferenciaAvis !== 0;
+                          const bajoCritico = f.stock_critico > 0 && f.disponible <= f.stock_critico;
+                          return (
+                            <tr
+                              key={f.id}
+                              className={`border-b border-border/70 transition-colors ${
+                                bajoCritico
+                                  ? "bg-rose-500/5 dark:bg-rose-500/8"
+                                  : tieneDiferencia
+                                    ? "bg-amber-500/5 dark:bg-amber-500/8"
+                                    : ""
+                              }`}
+                            >
+                              <td className={`px-2 py-2.5 border-l-4 ${
+                                bajoCritico
+                                  ? "border-l-rose-500"
+                                  : tieneDiferencia
+                                    ? "border-l-amber-500"
+                                    : "border-l-transparent"
+                              }`}>
+                                <span className="font-medium">{f.nombre}</span>
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  ({f.codigo} · {f.unidad})
+                                </span>
+                              </td>
+                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">{f.cierreAnterior}</td>
+                              <td className="px-2 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">{f.ingresoMes > 0 ? `+${f.ingresoMes}` : f.ingresoMes}</td>
+                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">{f.descuentoMes}</td>
+                              <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${
+                                bajoCritico ? "text-rose-600 dark:text-rose-400" : ""
+                              }`}>
+                                {f.disponible}
+                              </td>
+                              <td className="px-2 py-2.5 text-right tabular-nums">{f.stockAvis}</td>
+                              <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${
+                                f.diferenciaAvis > 0
+                                  ? "text-emerald-700 dark:text-emerald-400"
+                                  : f.diferenciaAvis < 0
+                                    ? "text-amber-600 dark:text-amber-400"
+                                    : "text-muted-foreground"
+                              }`}>
+                                {f.diferenciaAvis > 0 ? `+${f.diferenciaAvis}` : f.diferenciaAvis}
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>

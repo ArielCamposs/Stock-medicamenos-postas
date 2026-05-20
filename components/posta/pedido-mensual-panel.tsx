@@ -126,9 +126,11 @@ function clasesFilaStock(
 function PedidoLineaMobileCard({
   m,
   soloLectura,
+  tooltipTexto,
 }: {
   m: PedidoMensualLineaCliente;
   soloLectura: boolean;
+  tooltipTexto: string;
 }) {
   const { filaClass, claseDisponible } = clasesFilaStock(
     m.disponible,
@@ -160,7 +162,13 @@ function PedidoLineaMobileCard({
       <div className="mt-3 flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-muted-foreground">Pedido</span>
         {soloLectura ? (
-          <span className="text-lg font-semibold tabular-nums">{m.cantidad_final}</span>
+          <span 
+            className="text-lg font-semibold tabular-nums cursor-not-allowed text-muted-foreground/80 flex items-center gap-1"
+            title={tooltipTexto}
+          >
+            {m.cantidad_final}
+            <span className="text-xs select-none">🔒</span>
+          </span>
         ) : (
           <input
             name={`final_${m.medicamentoId}`}
@@ -191,6 +199,9 @@ export function PedidoMensualPanel({
   lineas,
 }: Props) {
   const router = useRouter();
+  const tooltipTexto = !puedeEditar
+    ? "No se puede editar: el periodo mensual está cerrado o no tienes permisos."
+    : "No se puede editar: el pedido mensual ya fue realizado y enviado.";
   const formRef = useRef<HTMLFormElement>(null);
   const submitEnviarRef = useRef<HTMLButtonElement>(null);
   const [confirmarAbierto, setConfirmarAbierto] = useState(false);
@@ -273,6 +284,20 @@ export function PedidoMensualPanel({
           <StockNivelLeyenda className="mt-3" compact />
         </CardHeader>
         <CardContent className="pt-4">
+          {estado !== "BORRADOR" && estado !== "OBSERVADO" && estado !== null ? (
+            <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20 p-4 text-sm text-amber-800 dark:text-amber-300">
+              <div className="flex items-start gap-2.5">
+                <span className="text-lg leading-none">⚠️</span>
+                <div>
+                  <h4 className="font-semibold leading-none">Pedido mensual ya realizado</h4>
+                  <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+                    No es posible modificar las cantidades ni volver a enviar el pedido de este mes, ya que se encuentra en estado <span className="font-bold uppercase">{estado}</span>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {state.error ? (
             <p
               className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -317,6 +342,7 @@ export function PedidoMensualPanel({
                             key={m.medicamentoId}
                             m={m}
                             soloLectura={soloLectura}
+                            tooltipTexto={tooltipTexto}
                           />
                         ))}
                       </div>
@@ -401,8 +427,12 @@ export function PedidoMensualPanel({
                                   </td>
                                   <td className="px-2 py-1.5 text-right">
                                     {soloLectura ? (
-                                      <span className="font-medium tabular-nums">
+                                      <span 
+                                        className="font-medium tabular-nums cursor-not-allowed text-muted-foreground/80 inline-flex items-center gap-1"
+                                        title={tooltipTexto}
+                                      >
                                         {m.cantidad_final}
+                                        <span className="text-[10px] select-none">🔒</span>
                                       </span>
                                     ) : (
                                       <input
