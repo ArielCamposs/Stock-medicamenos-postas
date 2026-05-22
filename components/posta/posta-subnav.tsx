@@ -16,8 +16,8 @@ import { cn } from "@/lib/utils";
 
 const LINKS: { segment: string; label: string; Icon: LucideIcon; description: string }[] = [
   { segment: "dashboard", label: "Inicio", Icon: LayoutDashboard, description: "Resumen de stock" },
-  { segment: "descuento", label: "Consumo diario", Icon: CalendarCheck, description: "Registrar consumo del día" },
-  { segment: "ingresos", label: "Entradas de stock", Icon: PackagePlus, description: "Registrar nuevos ingresos" },
+  { segment: "descuento", label: "Descuento diario", Icon: CalendarCheck, description: "Registrar descuento del día" },
+  { segment: "ingresos", label: "Ingreso de medicamentos", Icon: PackagePlus, description: "Registrar nuevos ingresos" },
   { segment: "avis", label: "Conteo AVIS", Icon: Archive, description: "Declarar stock físico" },
   { segment: "pedidos", label: "Pedido mensual", Icon: ClipboardList, description: "Solicitud de reposición" },
   { segment: "cierre", label: "Cierre del mes", Icon: Lock, description: "Cerrar el período" },

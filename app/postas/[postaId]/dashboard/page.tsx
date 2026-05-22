@@ -330,32 +330,32 @@ export default async function PostaDashboardPage({ params }: PageProps) {
           const isWarning = c.color === "amber" && c.count && c.count > 0;
           
           let cardBgClass = "bg-card border-border/80 hover:border-border hover:shadow-sm";
-          let iconWrapperClass = "bg-muted text-muted-foreground";
+          let iconWrapperClass = "text-muted-foreground";
           let valueClass = "text-foreground";
           
           if (c.color === "primary") {
-            iconWrapperClass = "bg-sky-500/10 text-sky-600 dark:text-sky-400";
+            iconWrapperClass = "text-sky-600 dark:text-sky-400";
             valueClass = "text-sky-700 dark:text-sky-400";
           } else if (c.color === "destructive") {
             if (isCritical) {
               cardBgClass = "bg-card border-rose-500/30 hover:border-rose-500/45 hover:shadow-sm";
-              iconWrapperClass = "bg-rose-500/15 text-rose-600 dark:text-rose-400 animate-pulse";
+              iconWrapperClass = "text-rose-600 dark:text-rose-400 animate-pulse";
               valueClass = "text-rose-600 dark:text-rose-400";
             } else {
-              iconWrapperClass = "bg-muted/80 text-muted-foreground/60";
+              iconWrapperClass = "text-muted-foreground/60";
               valueClass = "text-muted-foreground/50";
             }
           } else if (c.color === "amber") {
             if (isWarning) {
               cardBgClass = "bg-card border-amber-500/30 hover:border-amber-500/45 hover:shadow-sm";
-              iconWrapperClass = "bg-amber-500/15 text-amber-600 dark:text-amber-400";
+              iconWrapperClass = "text-amber-600 dark:text-amber-400";
               valueClass = "text-amber-600 dark:text-amber-400";
             } else {
-              iconWrapperClass = "bg-muted/80 text-muted-foreground/60";
+              iconWrapperClass = "text-muted-foreground/60";
               valueClass = "text-muted-foreground/50";
             }
           } else if (c.color === "info") {
-            iconWrapperClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+            iconWrapperClass = "text-emerald-600 dark:text-emerald-400";
             valueClass = "text-emerald-700 dark:text-emerald-400";
           }
 
