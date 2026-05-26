@@ -192,7 +192,28 @@ export default async function AdminPostasPage() {
       ) : null}
 
       {postas.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No hay postas cargadas todavía.</p>
+        <div className="flex flex-col items-center justify-center p-8 py-14 text-center text-muted-foreground border border-dashed border-border rounded-2xl bg-muted/5">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground/70 mb-4 border border-border/40">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-7"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
+            </svg>
+          </div>
+          <h3 className="font-heading text-sm font-semibold text-foreground">Sin postas registradas</h3>
+          <p className="text-xs text-muted-foreground/80 mt-1 max-w-[280px]">
+            No hay centros de salud habilitados en la base de datos.
+            {puedeEditar ? " Utilice el formulario de abajo para registrar la primera posta." : ""}
+          </p>
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {postas.map((p) => {

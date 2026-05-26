@@ -13,6 +13,7 @@ export function AdminSubnav({ puedeCatalogo }: { puedeCatalogo: boolean }) {
   const links: LinkDef[] = [
     { href: "/admin", label: "Supervisión", exact: true },
     { href: "/admin/pedidos", label: "Pedidos" },
+    { href: "/admin/comparativas", label: "Comparativas" },
   ];
   if (puedeCatalogo) {
     links.push(

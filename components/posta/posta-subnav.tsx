@@ -44,14 +44,14 @@ export function PostaSubnav({ postaId }: { postaId: string }) {
             href={href}
             title={description}
             className={cn(
-              "inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+              "inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-150",
               active
-                ? "bg-primary/10 text-primary border border-primary/20 shadow-sm"
-                : "text-muted-foreground hover:bg-muted/80 hover:text-foreground border border-transparent"
+                ? "bg-primary/15 text-primary border-2 border-primary/55 shadow-sm font-semibold"
+                : "font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground border-2 border-transparent"
             )}
           >
             <Icon
-              className={cn("size-4 shrink-0", active ? "text-primary" : "opacity-70")}
+              className={cn("size-4 shrink-0", active ? "text-primary" : "opacity-55")}
               aria-hidden
             />
             <span className="hidden sm:inline">{label}</span>

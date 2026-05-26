@@ -65,10 +65,45 @@ export function IngresoStockLoteForm({
     {}
   );
 
+  const [totalModificados, setTotalModificados] = useState(0);
+
+  const limpiarTodo = () => {
+    const inputs = document.querySelectorAll("input[name^='cant_']");
+    inputs.forEach((input) => {
+      if (input instanceof HTMLInputElement) {
+        input.value = "";
+      }
+    });
+    setTotalModificados(0);
+  };
+
   useEffect(() => {
-    if (state.success) toast(state.success, "success");
+    if (state.success) {
+      toast(state.success, "success");
+      const inputs = document.querySelectorAll("input[name^='cant_']");
+      inputs.forEach((input) => {
+        if (input instanceof HTMLInputElement) {
+          input.value = "";
+        }
+      });
+      setTotalModificados(0);
+    }
     if (state.error) toast(state.error, "error");
   }, [state.success, state.error, toast]);
+
+  const handleFormChange = (e: React.FormEvent<HTMLFormElement>) => {
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    let count = 0;
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith("cant_") && value && Number(value) > 0) {
+        count++;
+      }
+    }
+    if (count !== totalModificados) {
+      setTotalModificados(count);
+    }
+  };
 
   const fechaApunte = useMemo(() => {
     const f = fechaIngresoParaMesMovimiento(mesContableYm, new Date());
@@ -88,7 +123,11 @@ export function IngresoStockLoteForm({
   );
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form
+      action={formAction}
+      onChange={handleFormChange}
+      className={cn("flex flex-col gap-4", totalModificados > 0 && "pb-24")}
+    >
       <input type="hidden" name="medicamento_ids_json" value={idsJson} />
       <input type="hidden" name="fecha" value={fechaApunte} />
       <input type="hidden" name="mes_movimiento" value={mesContableYm} />
@@ -177,11 +216,51 @@ export function IngresoStockLoteForm({
       ) : null}
 
       {medicamentos.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No hay medicamentos activos en el catálogo.
-        </p>
+        <div className="flex flex-col items-center justify-center p-8 py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg bg-muted/5">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground/70 mb-4 border border-border/40">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-7"
+            >
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+              <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+          </div>
+          <h3 className="font-heading text-sm font-semibold text-foreground">Catálogo vacío</h3>
+          <p className="text-xs text-muted-foreground/80 mt-1 max-w-[280px]">
+            No hay medicamentos o insumos activos registrados en el catálogo de esta posta.
+          </p>
+        </div>
       ) : filtrados.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Sin resultados para la búsqueda.</p>
+        <div className="flex flex-col items-center justify-center p-8 py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg bg-muted/5 animate-fade-in">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/5 text-primary/70 mb-4 border border-primary/10">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-7 text-primary/60"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+              <path d="M8 11h6" />
+            </svg>
+          </div>
+          <h3 className="font-heading text-sm font-semibold text-foreground">Sin resultados</h3>
+          <p className="text-xs text-muted-foreground/80 mt-1 max-w-[280px]">
+            No encontramos coincidencias para &ldquo;<span className="font-medium text-foreground">{busqueda}</span>&rdquo;. Intente con otro término.
+          </p>
+        </div>
       ) : (
         <div className="relative max-h-[min(60vh,640px)] overflow-auto rounded-lg border border-border shadow-sm">
           <table className="w-full min-w-[42rem] border-collapse text-sm">
@@ -264,9 +343,43 @@ export function IngresoStockLoteForm({
         </div>
       )}
 
-      <Button type="submit" disabled={pending || medicamentos.length === 0}>
-        {pending ? "Guardando…" : "Registrar ingresos"}
-      </Button>
+      {totalModificados === 0 && (
+        <Button type="submit" disabled={pending || medicamentos.length === 0}>
+          {pending ? "Guardando…" : "Registrar ingresos"}
+        </Button>
+      )}
+
+      {totalModificados > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-md py-4 px-6 shadow-xl animate-in slide-in-from-bottom duration-200">
+          <div className="mx-auto max-w-7xl flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
+                {totalModificados}
+              </span>
+              <p className="text-sm font-medium text-muted-foreground">
+                {totalModificados === 1
+                  ? "medicamento con cantidad ingresada"
+                  : "medicamentos con cantidades ingresadas"}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={limpiarTodo}
+                disabled={pending}
+                className="h-9 px-3"
+              >
+                Limpiar todo
+              </Button>
+              <Button type="submit" disabled={pending} className="h-9 px-4 shadow-sm hover:shadow-md transition-all font-semibold">
+                {pending ? "Guardando…" : `Registrar ${totalModificados} ingresos`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -23,12 +24,15 @@ type Props = {
 };
 
 function etiquetaRol(rol: string): string {
+  const r = rol.toLowerCase();
   const mapa: Record<string, string> = {
-    encargado_posta: "Encargada/o",
-    admin_general: "Administración",
+    encargado_posta: "Encargada/o de Postas",
+    posta_manager: "Encargada/o de Postas",
+    admin_general: "Administradora Postas",
     supervision_posta: "Supervisión",
+    read_only: "Supervisión",
   };
-  return mapa[rol] ?? rol.replaceAll("_", " ");
+  return mapa[r] ?? rol.replaceAll("_", " ");
 }
 
 function abreviarEmail(email: string | null | undefined, id: string): string {
@@ -77,19 +81,32 @@ export default async function PostaLayout({ children, params }: Props) {
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3">
           <div className="flex flex-wrap items-center gap-4 sm:justify-between">
             <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <Link
-                  className="min-w-0 text-foreground hover:text-primary"
+                  className="flex items-center gap-3 min-w-0 group"
                   href={`/postas/${postaId}/dashboard`}
                 >
-                  <span className="block truncate font-semibold leading-tight">
-                    {tituloPosta}
-                  </span>
-                  {codigoPosta ? (
-                    <span className="block font-mono text-[11px] font-normal text-muted-foreground">
-                      {codigoPosta}
+                  <div className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all group-hover:scale-105">
+                    <Image
+                      src="/DESAM.jpeg"
+                      alt="DESAM Logo"
+                      fill
+                      sizes="36px"
+                      className="object-cover"
+                    />
+                  </div>
+                  <div className="flex flex-col min-w-0 leading-tight">
+                    <span className="block truncate font-bold text-primary text-sm sm:text-base tracking-tight transition-colors">
+                      {tituloPosta}
                     </span>
-                  ) : null}
+                    {codigoPosta ? (
+                      <div className="flex items-center mt-0.5">
+                        <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary font-mono uppercase tracking-wider leading-none">
+                          {codigoPosta}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
                 </Link>
                 <PostaSyncBadge postaId={postaId} />
               </div>
@@ -118,7 +135,12 @@ export default async function PostaLayout({ children, params }: Props) {
                 </span>
               </div>
               <form action={signOutAction}>
-                <Button type="submit" variant="outline" size="sm">
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 dark:border-rose-950 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:text-rose-300 transition-colors"
+                >
                   Salir
                 </Button>
               </form>

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { AdminSubnav } from "@/components/admin/admin-subnav";
@@ -8,6 +9,18 @@ import {
   requirePerfilUsuario,
   tieneAccesoGlobalAdmin,
 } from "@/lib/auth/session";
+
+function etiquetaRol(rol: string): string {
+  const r = rol.toLowerCase();
+  const mapa: Record<string, string> = {
+    encargado_posta: "Encargada/o de Postas",
+    posta_manager: "Encargada/o de Postas",
+    admin_general: "Administradora Postas",
+    supervision_posta: "Supervisión",
+    read_only: "Supervisión",
+  };
+  return mapa[r] ?? rol.replaceAll("_", " ");
+}
 
 export default async function AdminLayout({
   children,
@@ -27,16 +40,40 @@ export default async function AdminLayout({
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3">
           <div className="flex flex-wrap items-center gap-4 sm:justify-between">
-            <p className="text-sm font-semibold text-foreground">Administración</p>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              <span className="max-w-[16rem] truncate sm:max-w-xs">
-                {profile.email ?? profile.id}
-                <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {profile.rol}
+            <div className="flex items-center gap-2.5">
+              <div className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+                <Image
+                  src="/DESAM.jpeg"
+                  alt="DESAM Logo"
+                  fill
+                  sizes="32px"
+                  className="object-cover"
+                />
+              </div>
+              <p className="text-sm font-bold text-primary tracking-tight">Administración DESAM</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+                <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-[11px] uppercase border border-primary/15 shadow-sm">
+                  {(profile.email ?? profile.id).slice(0, 2)}
+                </div>
+                <div className="hidden sm:block leading-tight">
+                  <p className="font-semibold text-foreground max-w-[14rem] truncate">
+                    {profile.email ?? profile.id}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/80 mt-0.5">{etiquetaRol(profile.rol)}</p>
+                </div>
+                <span className="sm:hidden rounded-full bg-primary/10 border border-primary/15 px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold text-primary">
+                  {etiquetaRol(profile.rol)}
                 </span>
-              </span>
+              </div>
               <form action={signOutAction}>
-                <Button type="submit" variant="outline" size="sm">
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 dark:border-rose-950 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:text-rose-300 transition-colors"
+                >
                   Cerrar sesión
                 </Button>
               </form>

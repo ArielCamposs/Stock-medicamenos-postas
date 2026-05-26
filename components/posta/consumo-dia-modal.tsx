@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 function formatFechaCorta(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
@@ -122,6 +123,29 @@ export function ConsumoDiaModal({
   const hayRegistro = initialCon > 0 || initialSin > 0;
   const teniaRegistroEnServidor = hayRegistro;
 
+  // Colores del header del modal según el estado del descuento
+  const headerBg =
+    !puedeRegistrar
+      ? "bg-muted/40"
+      : alertaSaldoProyectado === "critico"
+        ? "bg-destructive/10"
+        : alertaSaldoProyectado === "cerca"
+          ? "bg-amber-500/10"
+          : hayRegistro
+            ? "bg-emerald-500/10"
+            : "bg-primary/10";
+
+  const titleColorClass =
+    !puedeRegistrar
+      ? "text-foreground"
+      : alertaSaldoProyectado === "critico"
+        ? "text-destructive"
+        : alertaSaldoProyectado === "cerca"
+          ? "text-amber-700 dark:text-amber-400"
+          : hayRegistro
+            ? "text-emerald-700 dark:text-emerald-400"
+            : "text-primary";
+
   async function handleAnular(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setDelErrorLocal(null);
@@ -217,20 +241,28 @@ export function ConsumoDiaModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="descuento-modal-title"
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-card p-5 text-card-foreground shadow-lg"
+        className="max-h-[90vh] w-full max-w-md overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2
-          id="descuento-modal-title"
-          className="text-base font-semibold leading-tight capitalize"
-        >
-          {puedeRegistrar ? "Descuento" : soloLecturaDescuentoVariante === "admin" ? "Consulta descuento" : "Descuento"}{" "}
-          — día {dia}
-        </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {formatFechaCorta(fechaISO)} · {medNombre}{" "}
-          <span className="font-mono">({medCodigo})</span> · {unidad}
-        </p>
+        {/* Header coloreado según estado */}
+        <div className={cn("shrink-0 px-5 pt-5 pb-4 border-b border-border/60 transition-colors duration-200", headerBg)}>
+          <h2
+            id="descuento-modal-title"
+            className={cn("text-base font-bold leading-tight transition-colors duration-200", titleColorClass)}
+          >
+            {puedeRegistrar ? "Descuento" : soloLecturaDescuentoVariante === "admin" ? "Consulta descuento" : "Descuento"}{" "}
+            — día {dia}
+          </h2>
+          <p className="mt-1.5 text-sm font-semibold text-foreground truncate">
+            {medNombre}{" "}
+            <span className="font-mono text-xs font-normal text-muted-foreground">({medCodigo})</span>
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {formatFechaCorta(fechaISO)} · {unidad}
+          </p>
+        </div>
+        {/* Body scrollable */}
+        <div className="overflow-y-auto flex-1 p-5">
 
         {saveError ? (
           <p
@@ -445,6 +477,7 @@ export function ConsumoDiaModal({
             </Button>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

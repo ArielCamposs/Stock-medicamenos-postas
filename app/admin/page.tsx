@@ -145,7 +145,7 @@ export default async function AdminDashboardPage() {
         <div className="pointer-events-none absolute -left-16 -bottom-16 size-48 rounded-full bg-emerald-500/5 blur-3xl" />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-4">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+            <div className="flex items-center justify-center text-primary">
               <Activity className="size-6" aria-hidden />
             </div>
             <div>
@@ -155,11 +155,6 @@ export default async function AdminDashboardPage() {
               <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight">
                 Supervisión de todas las postas
               </h1>
-              <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                Resumen por posta para el día calendario (
-                {ZONA_CALENDARIO_OPERACION}). Los registros los carga cada encargado en su
-                sede.
-              </p>
             </div>
           </div>
           <div className="rounded-xl border border-border/60 bg-card/85 px-4 py-3 text-center shadow-sm backdrop-blur-sm sm:text-right">
@@ -173,49 +168,62 @@ export default async function AdminDashboardPage() {
         </div>
 
         <div className="relative mt-8 grid gap-4 sm:grid-cols-3">
-          <div className="flex items-center gap-3.5 rounded-xl border border-sky-500/20 bg-gradient-to-tr from-sky-500/8 via-card to-card p-4 shadow-sm hover:border-sky-500/35 hover:shadow-sky-500/5 transition-all">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
-              <Landmark className="size-5" />
+          <div className="flex flex-col gap-4 rounded-xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.02] to-card p-5 shadow-sm hover:border-sky-500/35 hover:shadow-md transition-all">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Postas activas</span>
+              <div className="flex items-center justify-center text-sky-600 dark:text-sky-400">
+                <Landmark className="size-5" />
+              </div>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Postas activas</p>
-              <p className="font-heading text-2xl font-bold tracking-tight text-sky-700 dark:text-sky-400 tabular-nums mt-0.5">
+              <p className="font-heading text-3xl font-extrabold tracking-tight text-sky-700 dark:text-sky-400 tabular-nums">
                 {postas.length}
               </p>
+              <p className="text-xs text-muted-foreground/80 mt-1">Sedes registradas en el sistema</p>
             </div>
           </div>
-          <div className="flex items-center gap-3.5 rounded-xl border border-emerald-500/20 bg-gradient-to-tr from-emerald-500/8 via-card to-card p-4 shadow-sm hover:border-emerald-500/35 hover:shadow-emerald-500/5 transition-all">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <Package className="size-5" />
+
+          <div className="flex flex-col gap-4 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.01] to-card p-5 shadow-sm hover:border-emerald-500/35 hover:shadow-md transition-all">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Medicamentos en catálogo</span>
+              <div className="flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                <Package className="size-5" />
+              </div>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Medicamentos en catálogo</p>
-              <p className="font-heading text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400 tabular-nums mt-0.5">
+              <p className="font-heading text-3xl font-extrabold tracking-tight text-emerald-700 dark:text-emerald-400 tabular-nums">
                 {meta}
               </p>
+              <p className="text-xs text-muted-foreground/80 mt-1">Medicamentos e insumos activos</p>
             </div>
           </div>
+
           <div className={cn(
-            "flex items-center gap-3.5 rounded-xl border p-4 shadow-sm transition-all",
+            "flex flex-col gap-4 rounded-xl border p-5 shadow-sm transition-all hover:shadow-md",
             sinDescuentoHoy > 0
-              ? "border-rose-500/30 bg-gradient-to-tr from-rose-500/12 via-card to-card hover:border-rose-500/45 hover:shadow-rose-500/5"
-              : "border-emerald-500/20 bg-gradient-to-tr from-emerald-500/8 via-card to-card hover:border-emerald-500/35 hover:shadow-emerald-500/5"
+              ? "border-rose-500/20 bg-gradient-to-br from-rose-500/[0.03] to-card hover:border-rose-500/35"
+              : "border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.01] to-card hover:border-emerald-500/35"
           )}>
-            <div className={cn(
-              "flex size-10 shrink-0 items-center justify-center rounded-lg",
-              sinDescuentoHoy > 0
-                ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 animate-pulse"
-                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-            )}>
-              <Activity className="size-5" />
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sin descuento hoy</span>
+              <div className={cn(
+                "flex items-center justify-center",
+                sinDescuentoHoy > 0
+                  ? "text-rose-600 dark:text-rose-400 animate-pulse"
+                  : "text-emerald-600 dark:text-emerald-400"
+              )}>
+                <Activity className="size-5" />
+              </div>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sin descuento hoy</p>
               <p className={cn(
-                "font-heading text-2xl font-bold tracking-tight tabular-nums mt-0.5",
+                "font-heading text-3xl font-extrabold tracking-tight tabular-nums",
                 sinDescuentoHoy > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
               )}>
                 {sinDescuentoHoy}
+              </p>
+              <p className="text-xs text-muted-foreground/80 mt-1">
+                {sinDescuentoHoy === 1 ? "Posta pendiente de registrar" : "Postas pendientes de registrar"}
               </p>
             </div>
           </div>
@@ -255,102 +263,199 @@ export default async function AdminDashboardPage() {
         </CardHeader>
         <CardContent className="p-0">
           {filas.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">
-              No hay postas activas.{" "}
-              {puedeCatalogo
-                ? "Crea postas desde «Postas» en el menú superior."
-                : null}
-            </p>
+            <div className="flex flex-col items-center justify-center p-8 py-14 text-center text-muted-foreground">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground/70 mb-4 border border-border/40">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-7"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
+                </svg>
+              </div>
+              <h3 className="font-heading text-sm font-semibold text-foreground">Sin postas activas</h3>
+              <p className="text-xs text-muted-foreground/80 mt-1 max-w-[280px]">
+                No hay centros de salud habilitados en la base de datos.
+                {puedeCatalogo ? " Registre una nueva posta en el catálogo." : ""}
+              </p>
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[40rem] border-collapse text-sm text-left">
-                <thead>
-                  <tr className="border-b border-border/60 bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    <th className="px-6 py-3.5">Posta</th>
-                    <th className="px-6 py-3.5 text-right">Descuentos hoy</th>
-                    <th className="px-6 py-3.5 text-right">Ingresos hoy</th>
-                    <th className="px-6 py-3.5">Estado descuento</th>
-                    <th className="px-6 py-3.5 text-right">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40">
-                  {filas.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="hover:bg-muted/30 transition-colors duration-150"
-                    >
-                      <td className="px-6 py-4">
-                        <span className="font-semibold text-foreground">{row.nombre}</span>
-                        {row.codigo ? (
-                          <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+            <>
+              {/* Desktop View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full min-w-[40rem] border-collapse text-sm text-left">
+                  <thead>
+                    <tr className="border-b border-border/60 bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      <th className="px-6 py-3.5">Posta</th>
+                      <th className="px-6 py-3.5 text-right">Descuentos hoy</th>
+                      <th className="px-6 py-3.5 text-right">Ingresos hoy</th>
+                      <th className="px-6 py-3.5">Estado descuento</th>
+                      <th className="px-6 py-3.5 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {filas.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="hover:bg-muted/30 transition-colors duration-150"
+                      >
+                        <td className="px-6 py-4">
+                          <span className="font-semibold text-foreground">{row.nombre}</span>
+                          {row.codigo ? (
+                            <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                              {row.codigo}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2.5">
+                            <span className="tabular-nums font-semibold text-foreground w-8 text-right shrink-0">
+                              {row.descuentosHoy}
+                            </span>
+                            <div className="hidden sm:flex items-center gap-1.5 w-16 shrink-0">
+                              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                <div 
+                                  className={cn(
+                                    "h-full rounded-full transition-all duration-300",
+                                    row.estadoDescuento === "ok"
+                                      ? "bg-emerald-500"
+                                      : row.estadoDescuento === "parcial"
+                                        ? "bg-amber-500"
+                                        : "bg-destructive"
+                                  )}
+                                  style={{ width: `${meta > 0 ? (row.descuentosHoy / meta) * 100 : 0}%` }}
+                                />
+                              </div>
+                              <span className="text-[9px] font-mono text-muted-foreground/60 w-6 text-right shrink-0">
+                                {meta > 0 ? Math.min(100, Math.round((row.descuentosHoy / meta) * 100)) : 0}%
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right tabular-nums font-medium text-muted-foreground">
+                          {row.ingresosHoy}
+                        </td>
+                        <td className="px-6 py-4">
+                          {row.estadoDescuento === "na" ? (
+                            <span className="text-muted-foreground font-mono">—</span>
+                          ) : row.estadoDescuento === "vacío" ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 border border-destructive/20 px-2.5 py-0.5 text-xs font-semibold text-destructive">
+                              <span className="size-1.5 rounded-full bg-destructive" />
+                              Sin registros
+                            </span>
+                          ) : row.estadoDescuento === "parcial" ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                              <span className="size-1.5 rounded-full bg-amber-500" />
+                              Parcial
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                              <span className="size-1.5 rounded-full bg-emerald-500" />
+                              Completo
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Link
+                            href={`/postas/${row.id}/dashboard`}
+                            className={cn(
+                              buttonVariants({ variant: "secondary", size: "sm" }),
+                              "h-8 text-xs font-medium"
+                            )}
+                          >
+                            Ver sede
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile View */}
+              <div className="block md:hidden divide-y divide-border/40">
+                {filas.map((row) => (
+                  <div key={row.id} className="p-4 flex flex-col gap-3 bg-background">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="font-bold text-sm text-foreground block truncate">{row.nombre}</span>
+                        {row.codigo && (
+                          <span className="inline-flex mt-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground font-bold uppercase leading-none">
                             {row.codigo}
                           </span>
-                        ) : null}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2.5">
-                          <span className="tabular-nums font-semibold text-foreground w-8 text-right shrink-0">
-                            {row.descuentosHoy}
-                          </span>
-                          <div className="hidden sm:flex items-center gap-1.5 w-16 shrink-0">
-                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                              <div 
-                                className={cn(
-                                  "h-full rounded-full transition-all duration-300",
-                                  row.estadoDescuento === "ok"
-                                    ? "bg-emerald-500"
-                                    : row.estadoDescuento === "parcial"
-                                      ? "bg-amber-500"
-                                      : "bg-destructive"
-                                )}
-                                style={{ width: `${meta > 0 ? (row.descuentosHoy / meta) * 100 : 0}%` }}
-                              />
-                            </div>
-                            <span className="text-[9px] font-mono text-muted-foreground/60 w-6 text-right shrink-0">
-                              {meta > 0 ? Math.min(100, Math.round((row.descuentosHoy / meta) * 100)) : 0}%
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right tabular-nums font-medium text-muted-foreground">
-                        {row.ingresosHoy}
-                      </td>
-                      <td className="px-6 py-4">
-                        {row.estadoDescuento === "na" ? (
-                          <span className="text-muted-foreground font-mono">—</span>
-                        ) : row.estadoDescuento === "vacío" ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 border border-destructive/20 px-2.5 py-0.5 text-xs font-semibold text-destructive">
-                            <span className="size-1.5 rounded-full bg-destructive" />
-                            Sin registros
-                          </span>
-                        ) : row.estadoDescuento === "parcial" ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
-                            <span className="size-1.5 rounded-full bg-amber-500" />
-                            Parcial
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                            <span className="size-1.5 rounded-full bg-emerald-500" />
-                            Completo
-                          </span>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <Link
-                          href={`/postas/${row.id}/dashboard`}
-                          className={cn(
-                            buttonVariants({ variant: "secondary", size: "sm" }),
-                            "h-8 text-xs font-medium"
-                          )}
-                        >
-                          Ver sede
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                      
+                      {row.estadoDescuento === "na" ? (
+                        <span className="text-muted-foreground font-mono text-xs">—</span>
+                      ) : row.estadoDescuento === "vacío" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 border border-destructive/20 px-2 py-0.5 text-[10px] font-bold text-destructive">
+                          <span className="size-1.5 rounded-full bg-destructive" />
+                          Sin registros
+                        </span>
+                      ) : row.estadoDescuento === "parcial" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                          <span className="size-1.5 rounded-full bg-amber-500" />
+                          Parcial
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          <span className="size-1.5 rounded-full bg-emerald-500" />
+                          Completo
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 py-2 px-2.5 bg-muted/30 rounded-xl border border-border/30 text-center">
+                      <div>
+                        <p className="text-[9px] text-muted-foreground uppercase font-semibold tracking-wider">Descuentos hoy</p>
+                        <p className="text-xs font-semibold text-foreground mt-0.5 tabular-nums">{row.descuentosHoy}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-muted-foreground uppercase font-semibold tracking-wider">Ingresos hoy</p>
+                        <p className="text-xs font-semibold text-foreground mt-0.5 tabular-nums">{row.ingresosHoy}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 text-xs pt-1">
+                      <div className="flex items-center gap-2 flex-1 max-w-[200px]">
+                        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                          <div 
+                            className={cn(
+                              "h-full rounded-full transition-all duration-300",
+                              row.estadoDescuento === "ok"
+                                ? "bg-emerald-500"
+                                : row.estadoDescuento === "parcial"
+                                  ? "bg-amber-500"
+                                  : "bg-destructive"
+                            )}
+                            style={{ width: `${meta > 0 ? (row.descuentosHoy / meta) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-[9px] font-mono text-muted-foreground font-bold">
+                          {meta > 0 ? Math.min(100, Math.round((row.descuentosHoy / meta) * 100)) : 0}%
+                        </span>
+                      </div>
+                      <Link
+                        href={`/postas/${row.id}/dashboard`}
+                        className={cn(
+                          buttonVariants({ variant: "secondary", size: "sm" }),
+                          "h-7 text-[11px] px-2.5 font-semibold shrink-0"
+                        )}
+                      >
+                        Ver sede
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -369,10 +474,10 @@ export default async function AdminDashboardPage() {
         )}>
           <div className="flex items-center gap-3">
             <div className={cn(
-              "flex size-9 shrink-0 items-center justify-center rounded-lg",
+              "flex items-center justify-center",
               alertasStock.length > 0
-                ? "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                : "bg-muted text-muted-foreground"
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-muted-foreground"
             )}>
               <AlertTriangle className="size-5" aria-hidden />
             </div>
@@ -383,84 +488,155 @@ export default async function AdminDashboardPage() {
         </CardHeader>
         <CardContent className="p-0">
           {alertasStock.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">
-              Ninguna posta con medicamentos en zona crítica o cerca del crítico en este
-              mes, o todavía no hay movimientos registrados para armar el saldo.
-            </p>
+            <div className="flex flex-col items-center justify-center p-8 py-14 text-center text-muted-foreground animate-fade-in">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 mb-4 border border-emerald-500/10">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-7 text-emerald-500"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </div>
+              <h3 className="font-heading text-sm font-semibold text-foreground">Niveles estables</h3>
+              <p className="text-xs text-muted-foreground/80 mt-1 max-w-[340px]">
+                Ninguna posta tiene medicamentos en estado de stock crítico o bajo el mínimo en este período.
+              </p>
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[36rem] border-collapse text-sm text-left">
-                <thead>
-                  <tr className="border-b border-border/60 bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    <th className="px-6 py-3.5">Posta</th>
-                    <th className="px-6 py-3.5 text-center">≤ crítico</th>
-                    <th className="px-6 py-3.5 text-center">Cerca</th>
-                    <th className="px-6 py-3.5 text-right">Peor margen</th>
-                    <th className="px-6 py-3.5 text-right">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40">
-                  {alertasStock.map((row) => (
-                    <tr
-                      key={row.postaId}
-                      className="hover:bg-muted/30 transition-colors duration-150"
-                    >
-                      <td className="px-6 py-4">
-                        <span className="font-semibold text-foreground">{row.postaNombre}</span>
-                        {row.postaCodigo ? (
-                          <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+            <>
+              {/* Desktop View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full min-w-[36rem] border-collapse text-sm text-left">
+                  <thead>
+                    <tr className="border-b border-border/60 bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      <th className="px-6 py-3.5">Posta</th>
+                      <th className="px-6 py-3.5 text-center">≤ crítico</th>
+                      <th className="px-6 py-3.5 text-center">Cerca</th>
+                      <th className="px-6 py-3.5 text-right">Peor margen</th>
+                      <th className="px-6 py-3.5 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {alertasStock.map((row) => (
+                      <tr
+                        key={row.postaId}
+                        className="hover:bg-muted/30 transition-colors duration-150"
+                      >
+                        <td className="px-6 py-4">
+                          <span className="font-semibold text-foreground">{row.postaNombre}</span>
+                          {row.postaCodigo ? (
+                            <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                              {row.postaCodigo}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-6 py-4 text-center tabular-nums">
+                          {row.nCritico > 0 ? (
+                            <span className="inline-flex items-center justify-center rounded-full bg-destructive/10 border border-destructive/20 px-2.5 py-0.5 text-xs font-bold text-destructive">
+                              {row.nCritico}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs font-medium">0</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-center tabular-nums">
+                          {row.nCerca > 0 ? (
+                            <span className="inline-flex items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                              {row.nCerca}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs font-medium">0</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right tabular-nums">
+                          <span
+                            className={cn(
+                              "font-semibold",
+                              row.minMargen < 0
+                                ? "text-destructive"
+                                : "text-foreground"
+                            )}
+                          >
+                            {row.minMargen > 0 ? "+" : ""}
+                            {row.minMargen}
+                          </span>
+                          <span className="ml-1 text-xs text-muted-foreground font-light">u. sobre crít.</span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Link
+                            href={`/postas/${row.postaId}/ingresos`}
+                            className={cn(
+                              buttonVariants({ variant: "ghost", size: "sm" }),
+                              "h-8 text-xs hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 font-medium"
+                            )}
+                          >
+                            Ver ingresos
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile View */}
+              <div className="block md:hidden divide-y divide-border/40">
+                {alertasStock.map((row) => (
+                  <div key={row.postaId} className="p-4 flex flex-col gap-3.5 bg-background">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="font-bold text-sm text-foreground block truncate">{row.postaNombre}</span>
+                        {row.postaCodigo && (
+                          <span className="inline-flex mt-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground font-bold uppercase leading-none">
                             {row.postaCodigo}
                           </span>
-                        ) : null}
-                      </td>
-                      <td className="px-6 py-4 text-center tabular-nums">
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {row.nCritico > 0 ? (
-                          <span className="inline-flex items-center justify-center rounded-full bg-destructive/10 border border-destructive/20 px-2.5 py-0.5 text-xs font-bold text-destructive">
-                            {row.nCritico}
+                          <span className="inline-flex items-center rounded-full bg-destructive/10 border border-destructive/20 px-2 py-0.5 text-[9px] font-bold text-destructive uppercase tracking-wider">
+                            {row.nCritico} Críticos
                           </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs font-medium">0</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-center tabular-nums">
+                        ) : null}
                         {row.nCerca > 0 ? (
-                          <span className="inline-flex items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
-                            {row.nCerca}
+                          <span className="inline-flex items-center rounded-full bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                            {row.nCerca} Bajos
                           </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs font-medium">0</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right tabular-nums">
-                        <span
-                          className={cn(
-                            "font-semibold",
-                            row.minMargen < 0
-                              ? "text-destructive"
-                              : "text-foreground"
-                          )}
-                        >
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-border/30">
+                      <div className="text-xs text-muted-foreground">
+                        Peor margen:{" "}
+                        <span className={cn("font-bold text-sm tabular-nums", row.minMargen < 0 ? "text-destructive" : "text-foreground")}>
                           {row.minMargen > 0 ? "+" : ""}
                           {row.minMargen}
                         </span>
-                        <span className="ml-1 text-xs text-muted-foreground font-light">u. sobre crít.</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <Link
-                          href={`/postas/${row.postaId}/ingresos`}
-                          className={cn(
-                            buttonVariants({ variant: "ghost", size: "sm" }),
-                            "h-8 text-xs hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 font-medium"
-                          )}
-                        >
-                          Ver ingresos
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        <span className="text-[10px] text-muted-foreground/80 font-normal ml-0.5">u. sobre crít.</span>
+                      </div>
+                      <Link
+                        href={`/postas/${row.postaId}/ingresos`}
+                        className={cn(
+                          buttonVariants({ variant: "ghost", size: "sm" }),
+                          "h-7 text-[11px] px-2.5 font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 shrink-0 border border-amber-500/15"
+                        )}
+                      >
+                        Ver ingresos
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -506,14 +682,6 @@ export default async function AdminDashboardPage() {
           </div>
         </section>
       ) : null}
-
-      <Link
-        href="/"
-        className={cn(buttonVariants({ variant: "outline" }), "inline-flex w-fit items-center text-xs font-semibold gap-1.5")}
-      >
-        <ArrowLeft className="size-3.5" />
-        Inicio
-      </Link>
     </div>
   );
 }

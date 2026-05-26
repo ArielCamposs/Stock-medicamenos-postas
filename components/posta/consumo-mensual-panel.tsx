@@ -353,16 +353,51 @@ export function ConsumoMensualPanel({
       <StockNivelLeyenda className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2" />
 
       {mergedMeds.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-10 text-center">
-          <Package className="size-8 text-muted-foreground" aria-hidden />
-          <p className="text-sm text-muted-foreground">
-            No hay medicamentos activos en el catálogo.
+        <div className="flex flex-col items-center justify-center p-8 py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg bg-muted/5">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground/70 mb-4 border border-border/40">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-7"
+            >
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+              <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+          </div>
+          <h3 className="font-heading text-sm font-semibold text-foreground">Catálogo vacío</h3>
+          <p className="text-xs text-muted-foreground/80 mt-1 max-w-[280px]">
+            No hay medicamentos o insumos activos registrados en el catálogo de esta posta.
           </p>
         </div>
       ) : medicamentosFiltrados.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Sin resultados para la búsqueda.
-        </p>
+        <div className="flex flex-col items-center justify-center p-8 py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg bg-muted/5 animate-fade-in">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/5 text-primary/70 mb-4 border border-primary/10">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-7 text-primary/60"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+              <path d="M8 11h6" />
+            </svg>
+          </div>
+          <h3 className="font-heading text-sm font-semibold text-foreground">Sin resultados</h3>
+          <p className="text-xs text-muted-foreground/80 mt-1 max-w-[280px]">
+            No encontramos coincidencias para &ldquo;<span className="font-medium text-foreground">{busqueda}</span>&rdquo;. Intente con otro término.
+          </p>
+        </div>
       ) : (
         <div className="space-y-8">
           {MEDICAMENTO_CATEGORIAS.map((cat) => {
