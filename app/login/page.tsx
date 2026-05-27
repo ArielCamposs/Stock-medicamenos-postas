@@ -72,7 +72,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex min-h-dvh w-full flex-1 flex-col overflow-x-hidden lg:h-dvh lg:flex-row lg:overflow-hidden">
-      {/* Panel izquierdo ~60%: imagen DESAM visible */}
+      {/* Panel izquierdo ~60%: imagen DESAM */}
       <aside
         className="relative hidden shrink-0 lg:fixed lg:inset-y-0 lg:left-0 lg:z-0 lg:block lg:h-dvh lg:w-[60%]"
         aria-hidden
@@ -88,7 +88,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
         <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-black/25 to-transparent" />
       </aside>
 
-      {/* Móvil: franja superior con la imagen */}
+      {/* Móvil: franja superior con la imagen DESAM */}
       <div className="relative aspect-[16/9] max-h-44 w-full shrink-0 sm:max-h-48 lg:hidden">
         <Image
           src="/DESAM.jpeg"

@@ -213,6 +213,7 @@ type IngresoUnitParams = {
   fecha: string;
   medicamentoId: string;
   cantidad: number;
+  loteId: string;
   tipoOrigen?: string;
   referencia?: string | null;
   observacion?: string | null;
@@ -228,7 +229,47 @@ function parseTextoOpcional(raw: FormDataEntryValue | null): string | null {
 }
 
 /**
- * Un movimiento de ingreso + fila de stock mensual alineada al registro.
+ * Cabecera de un ingreso (evento) con varias líneas de medicamentos.
+ */
+async function crearIngresoStockLote(
+  supabase: SupabaseSrv,
+  gate: { userId: string },
+  postaId: string,
+  p: {
+    fecha: string;
+    tipoOrigen: string;
+    referencia: string | null;
+    observacion: string | null;
+  }
+): Promise<{ ok: true; loteId: string } | { ok: false; error: string }> {
+  const { anio, mes } = anioMesActual(new Date(p.fecha + "T12:00:00"));
+  const abierto = await validarMesAbierto(supabase, postaId, anio, mes);
+  if (!abierto.ok) {
+    return { ok: false, error: abierto.error };
+  }
+
+  const { data: created, error } = await supabase
+    .from("ingresos_stock_lotes")
+    .insert({
+      posta_id: postaId,
+      fecha: p.fecha,
+      tipo_origen: p.tipoOrigen,
+      referencia: p.referencia,
+      observacion: p.observacion,
+      created_by: gate.userId,
+    })
+    .select("id")
+    .single();
+
+  if (error || !created || typeof created !== "object" || typeof (created as { id: unknown }).id !== "string") {
+    return { ok: false, error: error?.message ?? "No se pudo crear el ingreso." };
+  }
+
+  return { ok: true, loteId: (created as { id: string }).id };
+}
+
+/**
+ * Una línea de ingreso + fila de stock mensual alineada al registro.
  */
 async function aplicarIngresoStockUnitario(
   supabase: SupabaseSrv,
@@ -251,6 +292,7 @@ async function aplicarIngresoStockUnitario(
     .insert({
     posta_id: postaId,
     medicamento_id: p.medicamentoId,
+    lote_id: p.loteId,
     fecha: p.fecha,
     cantidad: p.cantidad,
     tipo_origen: tipoOrigen,
@@ -296,174 +338,26 @@ async function aplicarIngresoStockUnitario(
   return {};
 }
 
-/** Corrige la cantidad de un ingreso ya registrado (misma fecha y medicamento). */
+/** Los ingresos registrados son inmutables por política de inventario. */
+const INGRESOS_INMUTABLES_MSG =
+  "Los ingresos registrados no se pueden modificar ni anular. Contacta a administración si hubo un error.";
+
+/** Corrige la cantidad de un ingreso ya registrado (deshabilitado: registros inmutables). */
 export async function actualizarIngresoStockMesAction(
-  postaId: string,
+  _postaId: string,
   _prev: PostaActionState,
-  formData: FormData
+  _formData: FormData
 ): Promise<PostaActionState> {
-  const gate = await assertStockYAvisPosta(postaId);
-  if (!gate.ok) {
-    return { error: gate.error };
-  }
-
-  const ingresoId = formData.get("ingreso_id")?.toString().trim();
-  const cantidad = Number.parseInt(formData.get("cantidad")?.toString() ?? "", 10);
-  const motivoCorreccion = parseTextoOpcional(formData.get("motivo_correccion"));
-  const observacion = parseTextoOpcional(formData.get("observacion"));
-
-  if (!ingresoId) {
-    return { error: "Falta identificar el ingreso." };
-  }
-  if (Number.isNaN(cantidad) || cantidad <= 0) {
-    return { error: "La cantidad debe ser un entero mayor que 0." };
-  }
-  if (!motivoCorreccion) {
-    return { error: "Indica un motivo para corregir el ingreso." };
-  }
-
-  const supabase = await createServerSupabaseClient();
-  const { data: row, error: selErr } = await supabase
-    .from("ingresos_stock_mes")
-    .select("id, posta_id, medicamento_id, fecha, cantidad, observacion")
-    .eq("id", ingresoId)
-    .eq("anulado", false)
-    .maybeSingle();
-
-  if (selErr || !row || typeof row !== "object") {
-    return { error: "No se encontró el ingreso." };
-  }
-  const r = row as { posta_id: string; medicamento_id: string; fecha: string };
-  if (r.posta_id !== postaId) {
-    return { error: "Ese ingreso no pertenece a esta posta." };
-  }
-  const { anio, mes } = anioMesActual(new Date(r.fecha + "T12:00:00"));
-  const abierto = await validarMesAbierto(supabase, postaId, anio, mes);
-  if (!abierto.ok) {
-    return { error: abierto.error };
-  }
-
-  const { error: upErr } = await supabase
-    .from("ingresos_stock_mes")
-    .update({ cantidad, observacion })
-    .eq("id", ingresoId);
-
-  if (upErr) {
-    return { error: upErr.message };
-  }
-
-  const sync = await sincronizarStockMensualDesdeRegistro(
-    supabase,
-    postaId,
-    r.medicamento_id,
-    anio,
-    mes
-  );
-  if (sync.error) {
-    return { error: sync.error };
-  }
-
-  await registrarAuditLog(supabase, {
-    actorId: gate.userId,
-    action: "ingreso_stock.corregido",
-    entity: "ingresos_stock_mes",
-    entityId: ingresoId,
-    metadata: {
-      postaId,
-      motivo: motivoCorreccion,
-      anterior: row,
-      nuevo: { cantidad, observacion },
-    },
-  });
-
-  revalidatePath(`/postas/${postaId}/ingresos`);
-  revalidatePath(`/postas/${postaId}/dashboard`);
-  revalidatePath(`/postas/${postaId}/descuento`);
-  revalidatePath(`/postas/${postaId}/pedidos`);
-  revalidatePath("/admin/medicamentos");
-  return { ok: true, success: "Ingreso actualizado." };
+  return { error: INGRESOS_INMUTABLES_MSG };
 }
 
-/** Anula un movimiento de ingreso (por ejemplo duplicado o mal cargado). */
+/** Anula un movimiento de ingreso (deshabilitado: registros inmutables). */
 export async function eliminarIngresoStockMesAction(
-  postaId: string,
+  _postaId: string,
   _prev: PostaActionState,
-  formData: FormData
+  _formData: FormData
 ): Promise<PostaActionState> {
-  const gate = await assertStockYAvisPosta(postaId);
-  if (!gate.ok) {
-    return { error: gate.error };
-  }
-
-  const ingresoId = formData.get("ingreso_id")?.toString().trim();
-  const motivo = parseTextoOpcional(formData.get("motivo_anulacion"));
-  if (!ingresoId) {
-    return { error: "Falta identificar el ingreso." };
-  }
-  if (!motivo) {
-    return { error: "Indica un motivo para anular el ingreso." };
-  }
-
-  const supabase = await createServerSupabaseClient();
-  const { data: row, error: selErr } = await supabase
-    .from("ingresos_stock_mes")
-    .select("id, posta_id, medicamento_id, fecha, cantidad, tipo_origen, referencia, observacion")
-    .eq("id", ingresoId)
-    .eq("anulado", false)
-    .maybeSingle();
-
-  if (selErr || !row || typeof row !== "object") {
-    return { error: "No se encontró el ingreso." };
-  }
-  const r = row as { posta_id: string; medicamento_id: string; fecha: string };
-  if (r.posta_id !== postaId) {
-    return { error: "Ese ingreso no pertenece a esta posta." };
-  }
-  const { anio, mes } = anioMesActual(new Date(r.fecha + "T12:00:00"));
-  const abierto = await validarMesAbierto(supabase, postaId, anio, mes);
-  if (!abierto.ok) {
-    return { error: abierto.error };
-  }
-
-  const { error: delErr } = await supabase
-    .from("ingresos_stock_mes")
-    .update({
-      anulado: true,
-      anulado_por: gate.userId,
-      anulado_en: new Date().toISOString(),
-      motivo_anulacion: motivo,
-    })
-    .eq("id", ingresoId)
-    .eq("anulado", false);
-  if (delErr) {
-    return { error: delErr.message };
-  }
-
-  const sync = await sincronizarStockMensualDesdeRegistro(
-    supabase,
-    postaId,
-    r.medicamento_id,
-    anio,
-    mes
-  );
-  if (sync.error) {
-    return { error: sync.error };
-  }
-
-  await registrarAuditLog(supabase, {
-    actorId: gate.userId,
-    action: "ingreso_stock.anulado",
-    entity: "ingresos_stock_mes",
-    entityId: ingresoId,
-    metadata: { postaId, motivo, anterior: row },
-  });
-
-  revalidatePath(`/postas/${postaId}/ingresos`);
-  revalidatePath(`/postas/${postaId}/dashboard`);
-  revalidatePath(`/postas/${postaId}/descuento`);
-  revalidatePath(`/postas/${postaId}/pedidos`);
-  revalidatePath("/admin/medicamentos");
-  return { ok: true, success: "Ingreso anulado." };
+  return { error: INGRESOS_INMUTABLES_MSG };
 }
 
 /** Varias líneas de ingreso con la misma fecha (solo cantidades > 0). Origen fijo en base de datos. */
@@ -534,11 +428,22 @@ export async function registrarIngresosStockLoteAction(
 
   const supabase = await createServerSupabaseClient();
 
+  const lote = await crearIngresoStockLote(supabase, gate, postaId, {
+    fecha,
+    tipoOrigen,
+    referencia,
+    observacion,
+  });
+  if (!lote.ok) {
+    return { error: lote.error };
+  }
+
   for (const { medicamentoId, cantidad } of lineas) {
     const err = await aplicarIngresoStockUnitario(supabase, gate, postaId, {
       fecha,
       medicamentoId,
       cantidad,
+      loteId: lote.loteId,
       tipoOrigen,
       referencia,
       observacion,
@@ -547,6 +452,21 @@ export async function registrarIngresosStockLoteAction(
       return { error: err.error };
     }
   }
+
+  await registrarAuditLog(supabase, {
+    actorId: gate.userId,
+    action: "ingreso_stock.lote_creado",
+    entity: "ingresos_stock_lotes",
+    entityId: lote.loteId,
+    metadata: {
+      postaId,
+      fecha,
+      tipoOrigen,
+      referencia,
+      observacion,
+      nLineas: lineas.length,
+    },
+  });
 
   revalidatePath(`/postas/${postaId}/ingresos`);
   revalidatePath(`/postas/${postaId}/dashboard`);
@@ -557,8 +477,8 @@ export async function registrarIngresosStockLoteAction(
     ok: true,
     success:
       lineas.length === 1
-        ? "Ingreso registrado."
-        : `Se registraron ${lineas.length} ingresos.`,
+        ? "Ingreso registrado con 1 medicamento."
+        : `Ingreso registrado con ${lineas.length} medicamentos.`,
   };
 }
 
@@ -588,10 +508,21 @@ export async function registrarIngresoStockAction(
   }
 
   const supabase = await createServerSupabaseClient();
+  const lote = await crearIngresoStockLote(supabase, gate, postaId, {
+    fecha,
+    tipoOrigen,
+    referencia,
+    observacion,
+  });
+  if (!lote.ok) {
+    return { error: lote.error };
+  }
+
   const err = await aplicarIngresoStockUnitario(supabase, gate, postaId, {
     fecha,
     medicamentoId,
     cantidad,
+    loteId: lote.loteId,
     tipoOrigen,
     referencia,
     observacion,

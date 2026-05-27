@@ -5,7 +5,10 @@ import {
   IngresoStockLoteForm,
   type LedgerIngresoFila,
 } from "@/components/posta/ingreso-stock-lote-form";
-import { UltimosIngresosTabla } from "@/components/posta/ultimos-ingresos-acciones";
+import {
+  HistorialIngresosLotes,
+  type IngresoLoteHistorial,
+} from "@/components/posta/historial-ingresos-lotes";
 import {
   Card,
   CardContent,
@@ -67,7 +70,7 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
   const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
   const puedeRegistrar = puedeRegistrarPorRol && !cierre;
 
-  const [{ data: medicamentos }, { data: ingresos }] = await Promise.all([
+  const [{ data: medicamentos }, { data: lotesRows }, { data: postaMeta }] = await Promise.all([
     supabase
       .from("medicamentos")
       .select(
@@ -76,15 +79,41 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
       .eq("activo", true)
       .order("nombre"),
     supabase
-      .from("ingresos_stock_mes")
+      .from("ingresos_stock_lotes")
       .select(
-        "id, fecha, cantidad, tipo_origen, referencia, observacion, medicamentos ( nombre, codigo_interno )"
+        `
+        id,
+        fecha,
+        tipo_origen,
+        referencia,
+        observacion,
+        created_at,
+        ingresos_stock_mes (
+          id,
+          cantidad,
+          anulado,
+          observacion,
+          medicamentos ( nombre, codigo_interno, unidad_medida )
+        )
+      `
       )
       .eq("posta_id", postaId)
-      .eq("anulado", false)
-      .order("fecha", { ascending: false })
-      .limit(40),
+      .order("created_at", { ascending: false })
+      .limit(30),
+    supabase.from("postas").select("nombre, codigo").eq("id", postaId).maybeSingle(),
   ]);
+
+  const postaNombre =
+    postaMeta && typeof postaMeta === "object" && "nombre" in postaMeta
+      ? String((postaMeta as { nombre: unknown }).nombre ?? "Posta")
+      : "Posta";
+  const postaCodigo =
+    postaMeta &&
+    typeof postaMeta === "object" &&
+    "codigo" in postaMeta &&
+    (postaMeta as { codigo: unknown }).codigo != null
+      ? String((postaMeta as { codigo: unknown }).codigo)
+      : null;
 
   const meds =
     medicamentos?.map((m) => ({
@@ -122,21 +151,50 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
     }
   }
 
-  type MedJoin = { nombre?: string; codigo_interno?: string } | null;
-  const rows =
-    ingresos?.map((r) => {
-      const med = r.medicamentos as MedJoin;
-      const tipo = String(r.tipo_origen);
+  type MedJoin = {
+    nombre?: string;
+    codigo_interno?: string;
+    unidad_medida?: string;
+  } | null;
+  type LineaJoin = {
+    id: string;
+    cantidad: number;
+    anulado: boolean;
+    observacion: string | null;
+    medicamentos: MedJoin;
+  };
+
+  const lotes: IngresoLoteHistorial[] =
+    lotesRows?.map((lote) => {
+      const tipo = String(lote.tipo_origen);
+      const lineasRaw = lote.ingresos_stock_mes;
+      const lineasArr = Array.isArray(lineasRaw) ? lineasRaw : lineasRaw ? [lineasRaw] : [];
+      const lineas = lineasArr
+        .map((linea) => {
+          const row = linea as LineaJoin;
+          const med = row.medicamentos;
+          return {
+            id: String(row.id),
+            cantidad: Number(row.cantidad),
+            anulado: Boolean(row.anulado),
+            observacion: row.observacion ? String(row.observacion) : null,
+            medNombre: med && typeof med === "object" ? String(med.nombre ?? "—") : "—",
+            medCodigo:
+              med && typeof med === "object" ? String(med.codigo_interno ?? "") : "",
+            unidadMedida:
+              med && typeof med === "object" ? String(med.unidad_medida ?? "") : "",
+          };
+        })
+        .sort((a, b) => a.medNombre.localeCompare(b.medNombre, "es"));
+
       return {
-        id: String(r.id),
-        fecha: String(r.fecha),
-        cantidad: Number(r.cantidad),
+        id: String(lote.id),
+        fecha: String(lote.fecha),
+        registradoEn: String(lote.created_at),
         tipoLabel: ORIGEN_LABEL[tipo] ?? tipo,
-        referencia: r.referencia ? String(r.referencia) : null,
-        observacion: r.observacion ? String(r.observacion) : null,
-        medNombre: med && typeof med === "object" ? String(med.nombre ?? "") : "—",
-        medCodigo:
-          med && typeof med === "object" ? String(med.codigo_interno ?? "") : "",
+        referencia: lote.referencia ? String(lote.referencia) : null,
+        observacion: lote.observacion ? String(lote.observacion) : null,
+        lineas,
       };
     }) ?? [];
 
@@ -150,7 +208,7 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
           puedeRegistrar
             ? "Registra aquí los medicamentos que ingresaron a la posta este mes."
             : cierre
-              ? "El mes está cerrado. Para registrar o corregir ingresos, solicita la reapertura del período."
+              ? "El mes está cerrado. Para registrar nuevos ingresos, solicita la reapertura del período."
               : "No tienes permiso para registrar ingresos en este período."
         }
       />
@@ -193,7 +251,7 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
               </h3>
               <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
                 {cierre
-                  ? `El mes de ${tituloMesChile(anio, mes)} ya fue cerrado. Los movimientos de este período están bloqueados. Si necesitas corregir algo, solicita la reapertura del período a administración.`
+                  ? `El mes de ${tituloMesChile(anio, mes)} ya fue cerrado. Los movimientos de este período están bloqueados. Si necesitas registrar un ingreso, solicita la reapertura del período a administración.`
                   : "Tu perfil de usuario no tiene permiso para registrar entradas de stock. Contacta al administrador si crees que esto es un error."}
               </p>
             </div>
@@ -210,13 +268,17 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
             <div>
               <CardTitle className="text-base">Historial de ingresos</CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                Últimos 40 registros · ordenados por fecha
+                Cada registro agrupa los medicamentos ingresados en una misma carga · últimos 30
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="pt-4">
-          <UltimosIngresosTabla postaId={postaId} puedeRegistrar={puedeRegistrar} rows={rows} />
+          <HistorialIngresosLotes
+            postaNombre={postaNombre}
+            postaCodigo={postaCodigo}
+            lotes={lotes}
+          />
         </CardContent>
       </Card>
     </div>

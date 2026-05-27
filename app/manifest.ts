@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Inventario medicamentos — Postas",
-    short_name: "Postas DESAM",
+    short_name: "Postas desam",
     description:
       "Aplicación interna de inventario y descuentos diarios por posta rural.",
     start_url: "/",

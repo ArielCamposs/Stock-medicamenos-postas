@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { signOutAction } from "@/app/actions/auth";
+import { DesamLogo } from "@/components/brand/desam-logo";
 import { DismissibleBanner } from "@/components/posta/dismissible-banner";
 import { PwaInstallHint } from "@/components/posta/pwa-install-hint";
 import { PostaSyncBadge } from "@/components/posta/posta-sync-badge";
@@ -86,14 +86,8 @@ export default async function PostaLayout({ children, params }: Props) {
                   className="flex items-center gap-3 min-w-0 group"
                   href={`/postas/${postaId}/dashboard`}
                 >
-                  <div className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all group-hover:scale-105">
-                    <Image
-                      src="/DESAM.jpeg"
-                      alt="DESAM Logo"
-                      fill
-                      sizes="36px"
-                      className="object-cover"
-                    />
+                  <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all group-hover:scale-105">
+                    <DesamLogo variant="header-md" />
                   </div>
                   <div className="flex flex-col min-w-0 leading-tight">
                     <span className="block truncate font-bold text-primary text-sm sm:text-base tracking-tight transition-colors">

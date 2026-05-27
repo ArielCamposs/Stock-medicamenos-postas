@@ -1,6 +1,6 @@
-import Image from "next/image";
 import { redirect } from "next/navigation";
 
+import { DesamLogo } from "@/components/brand/desam-logo";
 import { AdminSubnav } from "@/components/admin/admin-subnav";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/actions/auth";
@@ -41,16 +41,10 @@ export default async function AdminLayout({
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3">
           <div className="flex flex-wrap items-center gap-4 sm:justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-white shadow-sm">
-                <Image
-                  src="/DESAM.jpeg"
-                  alt="DESAM Logo"
-                  fill
-                  sizes="32px"
-                  className="object-cover"
-                />
+              <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+                <DesamLogo variant="header-sm" />
               </div>
-              <p className="text-sm font-bold text-primary tracking-tight">Administración DESAM</p>
+              <p className="text-sm font-bold text-primary tracking-tight">Administración desam</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2.5 text-xs text-muted-foreground">

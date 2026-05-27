@@ -345,7 +345,7 @@ export function IngresoStockLoteForm({
 
       {totalModificados === 0 && (
         <Button type="submit" disabled={pending || medicamentos.length === 0}>
-          {pending ? "Guardando…" : "Registrar ingresos"}
+          {pending ? "Guardando…" : "Registrar ingreso"}
         </Button>
       )}
 
@@ -374,7 +374,7 @@ export function IngresoStockLoteForm({
                 Limpiar todo
               </Button>
               <Button type="submit" disabled={pending} className="h-9 px-4 shadow-sm hover:shadow-md transition-all font-semibold">
-                {pending ? "Guardando…" : `Registrar ${totalModificados} ingresos`}
+                {pending ? "Guardando…" : `Registrar ingreso (${totalModificados})`}
               </Button>
             </div>
           </div>
