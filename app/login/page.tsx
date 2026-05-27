@@ -71,7 +71,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
     errorCodigoForm === "perfil_inactivo";
 
   return (
-    <div className="flex min-h-dvh w-full flex-1 flex-col lg:h-dvh lg:flex-row lg:overflow-hidden">
+    <div className="flex min-h-dvh w-full flex-1 flex-col overflow-x-hidden lg:h-dvh lg:flex-row lg:overflow-hidden">
       {/* Panel izquierdo ~60%: imagen DESAM visible */}
       <aside
         className="relative hidden shrink-0 lg:fixed lg:inset-y-0 lg:left-0 lg:z-0 lg:block lg:h-dvh lg:w-[60%]"
@@ -89,7 +89,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
       </aside>
 
       {/* Móvil: franja superior con la imagen */}
-      <div className="relative h-36 shrink-0 lg:hidden">
+      <div className="relative aspect-[16/9] max-h-44 w-full shrink-0 sm:max-h-48 lg:hidden">
         <Image
           src="/DESAM.jpeg"
           alt=""
@@ -104,12 +104,13 @@ export default async function LoginPage({ searchParams }: PageProps) {
       {/* Panel derecho ~40%, invade un poco el izquierdo en desktop */}
       <main
         className={cn(
-          "relative z-10 flex flex-1 flex-col justify-center gap-8 bg-background px-6 py-10",
-          "lg:ml-[calc(60%-3.5rem)] lg:min-h-dvh lg:w-[calc(40%+3.5rem)] lg:max-w-xl lg:rounded-l-3xl lg:border lg:border-border/60",
-          "lg:px-10 lg:py-14 lg:shadow-2xl"
+          "relative z-10 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto bg-background",
+          "px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:gap-8 sm:px-6 sm:py-10",
+          "lg:ml-[calc(60%-3.5rem)] lg:min-h-dvh lg:w-[calc(40%+3.5rem)] lg:max-w-xl lg:justify-center lg:gap-8 lg:overflow-visible",
+          "lg:rounded-l-3xl lg:border lg:border-border/60 lg:px-10 lg:py-14 lg:shadow-2xl"
         )}
       >
-        <div className="mx-auto flex w-full max-w-md flex-col items-center gap-2 text-center lg:items-stretch lg:text-left">
+        <div className="mx-auto flex w-full min-w-0 max-w-md flex-col items-center gap-2 text-center lg:items-stretch lg:text-left">
           <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
             Postas DESAM
           </h1>
@@ -121,7 +122,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
         <LoginForm redirectTo={redirectTo} errorCodigo={errorCodigoForm} />
 
         {necesitaCerrarSesion ? (
-          <form action={signOutAction} className="mx-auto w-full max-w-md">
+          <form action={signOutAction} className="mx-auto w-full min-w-0 max-w-md">
             <Button type="submit" variant="outline" className="w-full">
               Cerrar sesión e intentar con otra cuenta
             </Button>

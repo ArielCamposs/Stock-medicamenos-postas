@@ -109,7 +109,7 @@ export default async function AdminComparativasPage() {
             Comparativas de Consumo
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Análisis de consumo semanal, mensual e histórico para control de stock en las sedes.
+            Análisis de consumo semanal, mensual e histórico para control de stock en las postas.
           </p>
         </div>
         <Link

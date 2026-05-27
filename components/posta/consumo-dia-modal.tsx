@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { eliminarConsumoDiaAction } from "@/app/actions/posta";
 import { encolarAnulacionLocal } from "@/lib/offline/anular-local";
 import { addLocalMovement } from "@/lib/offline/db";
+import { trySyncSingleMovement } from "@/lib/offline/sync";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { nivelAlertaStock } from "@/lib/posta/admin-stock-alerta-postas";
 import { Button } from "@/components/ui/button";
@@ -209,8 +210,9 @@ export function ConsumoDiaModal({
 
     setSaving(true);
     try {
-      await addLocalMovement({
-        idLocal: crypto.randomUUID(),
+      const idLocal = crypto.randomUUID();
+      const movement = await addLocalMovement({
+        idLocal,
         postaId,
         medicamentoId,
         fechaConsumo: fechaISO,
@@ -219,6 +221,25 @@ export function ConsumoDiaModal({
         observacion,
         estado: "pending",
       });
+
+      const sinRed = typeof navigator !== "undefined" && !navigator.onLine;
+      if (!sinRed) {
+        const syncResult = await trySyncSingleMovement(postaId, movement);
+        if (syncResult.ok) {
+          onLocalSaved?.();
+          router.refresh();
+          onClose();
+          return;
+        }
+        if (syncResult.offline) {
+          onLocalSaved?.();
+          onClose();
+          return;
+        }
+        setSaveError(syncResult.error ?? "No se pudo sincronizar con el servidor.");
+        onLocalSaved?.();
+        return;
+      }
 
       onLocalSaved?.();
       onClose();

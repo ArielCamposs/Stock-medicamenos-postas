@@ -167,6 +167,7 @@
 /* Login: feedback visual sin depender de utilidades Tailwind purgadas */
 .login-field-shake {
   animation: login-shake 0.48s ease-in-out;
+  max-width: 100%;
 }
 
 .login-input-error {

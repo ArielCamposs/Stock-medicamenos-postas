@@ -166,7 +166,7 @@ export function LoginForm({ redirectTo, errorCodigo }: Props) {
   return (
     <Card
       className={cn(
-        "w-full max-w-md",
+        "mx-auto w-full min-w-0 max-w-md",
         formError && "login-card-error",
         shakeTarget === "form" && "login-field-shake"
       )}

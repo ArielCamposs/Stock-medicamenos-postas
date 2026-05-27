@@ -9,6 +9,7 @@ import { AprobarPedidoButton } from "@/components/admin/aprobar-pedido-button";
 import { PedidoBandejaListoButton } from "@/components/admin/pedido-bandeja-listo-button";
 import { PedidoEstadoBadge } from "@/components/posta/pedido-estado-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { etiquetaPedidoEstado } from "@/lib/domain/pedido-estado-ui";
 import { buildPedidosHistorialAdminXlsxBuffer } from "@/lib/reportes/pedidos-historial-admin-xlsx";
 import { cn } from "@/lib/utils";
 
@@ -44,18 +45,12 @@ function nombreArchivoPedido(fila: AdminPedidoTablaFila) {
   return `pedido-${fila.id.slice(0, 8)}-${y}-${m}-${day}.xlsx`;
 }
 
-/** En supervisión: si no está marcado listo en bandeja, mostramos solo «Pendiente». */
-function etiquetaEstadoAdmin(f: Pick<AdminPedidoTablaFila, "estado" | "bandejaListo">) {
-  if (!f.bandejaListo) return "Pendiente";
-  return f.estado;
-}
-
 function filaAXlsxPayload(f: AdminPedidoTablaFila) {
   return {
     postaNombre: f.postaNombre,
     postaCodigo: f.postaCodigo,
     mesTitulo: f.mesTitulo,
-    estado: etiquetaEstadoAdmin(f),
+    estado: etiquetaPedidoEstado(f.estado),
     enviadoEtiqueta: f.enviadoEtiqueta,
     pendienteBandeja: f.pendienteBandeja ? "Sí" : "No",
     bandejaListo: f.bandejaListo ? "Sí" : "No",
@@ -147,13 +142,7 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
                 </td>
                 <td className="px-3 py-3 align-middle capitalize">{r.mesTitulo}</td>
                 <td className="px-3 py-3 align-middle">
-                  {r.bandejaListo ? (
-                    <PedidoEstadoBadge estado={r.estado} />
-                  ) : (
-                    <span className="inline-flex h-5 items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 text-[11px] font-medium uppercase tracking-wide text-amber-950 dark:text-amber-100">
-                      Pendiente
-                    </span>
-                  )}
+                  <PedidoEstadoBadge estado={r.estado} />
                 </td>
                 <td className="px-3 py-3 align-middle text-muted-foreground">{r.enviadoEtiqueta}</td>
                 <td className="px-3 py-3 align-middle text-right" onClick={(e) => e.stopPropagation()}>
@@ -247,18 +236,13 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
                   <div className="space-y-3 px-4 py-4 text-sm sm:px-5">
                     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
                       <dt className="text-muted-foreground">Estado</dt>
-                      <dd
-                        className={cn(
-                          "text-xs",
-                          seleccion.bandejaListo ? "font-mono" : "font-medium text-foreground"
-                        )}
-                      >
-                        {etiquetaEstadoAdmin(seleccion)}
+                      <dd>
+                        <PedidoEstadoBadge estado={seleccion.estado} />
                       </dd>
                       <dt className="text-muted-foreground">Enviado</dt>
                       <dd>{seleccion.enviadoEtiqueta}</dd>
                       <dt className="text-muted-foreground">Bandeja</dt>
-                      <dd>{seleccion.pendienteBandeja ? "Pendiente seguimiento" : "—"}</dd>
+                      <dd>{seleccion.pendienteBandeja ? "En bandeja (sin marcar listo)" : "—"}</dd>
                       <dt className="text-muted-foreground">Listo admin</dt>
                       <dd>{seleccion.bandejaListo ? "Sí" : "No"}</dd>
                       <dt className="text-muted-foreground">ID</dt>
