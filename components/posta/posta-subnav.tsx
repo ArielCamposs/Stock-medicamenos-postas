@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Lock,
   PackagePlus,
+  ShoppingCart,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -20,6 +21,7 @@ const LINKS: { segment: string; label: string; Icon: LucideIcon; description: st
   { segment: "ingresos", label: "Ingreso de medicamentos", Icon: PackagePlus, description: "Registrar nuevos ingresos" },
   { segment: "avis", label: "Conteo AVIS", Icon: Archive, description: "Declarar stock físico" },
   { segment: "pedidos", label: "Pedido mensual", Icon: ClipboardList, description: "Solicitud de reposición" },
+  { segment: "insumos", label: "Insumos", Icon: ShoppingCart, description: "Stock y pedido de insumos" },
   { segment: "cierre", label: "Cierre del mes", Icon: Lock, description: "Cerrar el período" },
 ];
 

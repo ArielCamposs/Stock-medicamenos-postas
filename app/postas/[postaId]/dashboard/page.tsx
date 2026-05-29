@@ -433,6 +433,12 @@ export default async function PostaDashboardPage({ params }: PageProps) {
         >
           Pedido mensual
         </Link>
+        <Link
+          href={`/postas/${postaId}/insumos`}
+          className={cn(buttonVariants({ variant: "outline" }), "w-fit text-xs font-semibold px-4.5 h-10")}
+        >
+          Insumos
+        </Link>
         <div className="flex-1 min-w-[2rem]" />
         {verAdmin ? (
           <Link
