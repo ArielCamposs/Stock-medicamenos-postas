@@ -12,14 +12,16 @@ import {
 } from "@/lib/auth/session";
 import { registrarAuditLog } from "@/lib/audit/stock-audit";
 import { anioMesActual, mesAnterior, permiteCierreMensualCalendarioOperacion } from "@/lib/domain/fecha-mes";
+import { obtenerFilasConciliacionCierre } from "@/lib/posta/cierre-conciliacion-filas";
 import { mesEstaCerrado } from "@/lib/posta/cierre-mensual";
 import {
   registrarConsumoDiario,
   revalidateRutasTrasConsumoDiario,
 } from "@/lib/posta/registrar-consumo-diario";
-import { snapshotLedgerMesPosta, type MedLedgerMin } from "@/lib/posta/snapshot-ledger-mes-posta";
+import { validarIngresoMedicamentosNoMismoDia } from "@/lib/posta/reglas-repeticion-dia";
 import {
   sincronizarStockMensualDesdeRegistro,
+  sincronizarStockMensualLote,
   validarMesAbierto,
 } from "@/lib/posta/sincronizar-stock-mensual-desde-registro";
 import {
@@ -221,8 +223,6 @@ type IngresoUnitParams = {
 
 type SupabaseSrv = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
-const TIPOS_ORIGEN_INGRESO = new Set(["COMPRA", "TRASLADO", "AJUSTE", "OTRO"]);
-
 function parseTextoOpcional(raw: FormDataEntryValue | null): string | null {
   const v = raw?.toString().trim() ?? "";
   return v.length > 0 ? v.slice(0, 500) : null;
@@ -373,9 +373,8 @@ export async function registrarIngresosStockLoteAction(
 
   const fecha = formData.get("fecha")?.toString().trim();
   const mesMovimiento = formData.get("mes_movimiento")?.toString().trim() ?? "";
-  const tipoOrigenRaw = formData.get("tipo_origen")?.toString().trim() ?? "OTRO";
-  const tipoOrigen = TIPOS_ORIGEN_INGRESO.has(tipoOrigenRaw) ? tipoOrigenRaw : "OTRO";
-  const referencia = parseTextoOpcional(formData.get("referencia"));
+  const tipoOrigen = "OTRO";
+  const referencia = null;
   const observacion = parseTextoOpcional(formData.get("observacion"));
 
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
@@ -427,6 +426,14 @@ export async function registrarIngresosStockLoteAction(
   }
 
   const supabase = await createServerSupabaseClient();
+  const { anio, mes } = anioMesActual(new Date(fecha + "T12:00:00"));
+
+  // Validar mes abierto UNA SOLA VEZ (no por cada medicamento).
+  const abierto = await validarMesAbierto(supabase, postaId, anio, mes);
+  if (!abierto.ok) return { error: abierto.error };
+
+  const mismoDia = await validarIngresoMedicamentosNoMismoDia(supabase, postaId, fecha);
+  if (!mismoDia.ok) return { error: mismoDia.error };
 
   const lote = await crearIngresoStockLote(supabase, gate, postaId, {
     fecha,
@@ -438,20 +445,31 @@ export async function registrarIngresosStockLoteAction(
     return { error: lote.error };
   }
 
-  for (const { medicamentoId, cantidad } of lineas) {
-    const err = await aplicarIngresoStockUnitario(supabase, gate, postaId, {
+  // Insertar todas las líneas en un solo batch (un round-trip en lugar de N).
+  const { error: insErr } = await supabase.from("ingresos_stock_mes").insert(
+    lineas.map(({ medicamentoId, cantidad }) => ({
+      posta_id: postaId,
+      medicamento_id: medicamentoId,
+      lote_id: lote.loteId,
       fecha,
-      medicamentoId,
       cantidad,
-      loteId: lote.loteId,
-      tipoOrigen,
+      tipo_origen: tipoOrigen,
       referencia,
       observacion,
-    });
-    if (err.error) {
-      return { error: err.error };
-    }
-  }
+      created_by: gate.userId,
+    }))
+  );
+  if (insErr) return { error: insErr.message };
+
+  // Sincronizar stock de todos los medicamentos en un solo lote (un round-trip en lugar de N).
+  const sync = await sincronizarStockMensualLote(
+    supabase,
+    postaId,
+    lineas.map((l) => l.medicamentoId),
+    anio,
+    mes
+  );
+  if (sync.error) return { error: sync.error };
 
   await registrarAuditLog(supabase, {
     actorId: gate.userId,
@@ -495,9 +513,8 @@ export async function registrarIngresoStockAction(
   const fecha = formData.get("fecha")?.toString().trim();
   const medicamentoId = formData.get("medicamento_id")?.toString().trim();
   const cantidad = Number.parseInt(formData.get("cantidad")?.toString() ?? "", 10);
-  const tipoOrigenRaw = formData.get("tipo_origen")?.toString().trim() ?? "OTRO";
-  const tipoOrigen = TIPOS_ORIGEN_INGRESO.has(tipoOrigenRaw) ? tipoOrigenRaw : "OTRO";
-  const referencia = parseTextoOpcional(formData.get("referencia"));
+  const tipoOrigen = "OTRO";
+  const referencia = null;
   const observacion = parseTextoOpcional(formData.get("observacion"));
   if (!fecha || !medicamentoId) {
     return { error: "Fecha y medicamento son obligatorios." };
@@ -697,28 +714,6 @@ export async function guardarDeclaracionStockAvisMensualAction(
   return { ok: true, success: "Declaración de stock AVIS guardada." };
 }
 
-async function cargarMedicamentosParaCierre(supabase: SupabaseSrv): Promise<MedLedgerMin[]> {
-  const { data } = await supabase
-    .from("medicamentos")
-    .select("id, stock_recomendado_default, stock_critico_default")
-    .eq("activo", true);
-
-  const out: MedLedgerMin[] = [];
-  if (!Array.isArray(data)) return out;
-  for (const row of data) {
-    const r = row as Record<string, unknown>;
-    if (typeof r.id !== "string") continue;
-    const rec = Number(r.stock_recomendado_default);
-    const crit = Number(r.stock_critico_default);
-    out.push({
-      id: r.id,
-      stock_recomendado_default: Number.isFinite(rec) ? Math.max(0, Math.trunc(rec)) : 0,
-      stock_critico_default: Number.isFinite(crit) ? Math.max(0, Math.trunc(crit)) : 0,
-    });
-  }
-  return out;
-}
-
 export async function cerrarMesPostaAction(
   postaId: string,
   _prev: PostaActionState,
@@ -750,48 +745,25 @@ export async function cerrarMesPostaAction(
     };
   }
 
-  const meds = await cargarMedicamentosParaCierre(supabase);
-  const [snap, { data: avisRows }] = await Promise.all([
-    snapshotLedgerMesPosta(supabase, postaId, anio, mes, meds),
-    supabase
-      .from("stock_avis_mensual")
-      .select("medicamento_id, stock_avis_cantidad")
-      .eq("posta_id", postaId)
-      .eq("anio", anio)
-      .eq("mes", mes),
-  ]);
-
-  const avis = new Map<string, number>();
-  if (Array.isArray(avisRows)) {
-    for (const row of avisRows) {
-      const r = row as Record<string, unknown>;
-      if (typeof r.medicamento_id === "string") {
-        const n = Number(r.stock_avis_cantidad);
-        avis.set(r.medicamento_id, Number.isFinite(n) ? Math.trunc(n) : 0);
-      }
-    }
-  }
-
-  let totalDisponible = 0;
-  let totalAvis = 0;
-  let diferenciasAvis = 0;
-  let bajoCritico = 0;
-  for (const m of meds) {
-    const s = snap.get(m.id);
-    if (!s) continue;
-    const stockAvis = avis.get(m.id) ?? 0;
-    totalDisponible += s.disponible;
-    totalAvis += stockAvis;
-    if (stockAvis !== s.disponible) diferenciasAvis += 1;
-    if (s.stock_critico > 0 && s.disponible <= s.stock_critico) bajoCritico += 1;
+  let filas;
+  let resumenTotales;
+  try {
+    const resultado = await obtenerFilasConciliacionCierre(supabase, postaId, anio, mes);
+    filas = resultado.filas;
+    resumenTotales = resultado.resumen;
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "No se pudo calcular el cierre del mes.",
+    };
   }
 
   const resumen = {
-    totalMedicamentos: meds.length,
-    totalDisponible,
-    totalAvis,
-    diferenciasAvis,
-    bajoCritico,
+    totalMedicamentos: resumenTotales.totalMedicamentos,
+    totalDisponible: resumenTotales.disponible,
+    totalAvis: resumenTotales.avis,
+    diferenciasAvis: resumenTotales.diferencias,
+    bajoCritico: resumenTotales.bajoCritico,
+    detalle: filas,
   };
 
   const { data: cierre, error } = await supabase

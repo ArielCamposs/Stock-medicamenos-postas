@@ -1,6 +1,7 @@
 import {
-  MEDICAMENTO_CATEGORIAS,
+  CATEGORIAS_CATALOGO_FORMULARIO,
   etiquetaMedicamentoCategoria,
+  normalizarMedicamentoCategoria,
   type MedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
 import { cn } from "@/lib/utils";
@@ -26,10 +27,13 @@ export function MedicamentoCategoriaNativeSelect({
   required = true,
   className,
 }: Props) {
+  const normalizada = normalizarMedicamentoCategoria(defaultValue);
   const dv =
-    typeof defaultValue === "string" && defaultValue.trim() !== ""
-      ? defaultValue
-      : "OTROS";
+    normalizada === "CONTRA_RECETA"
+      ? "OTROS"
+      : CATEGORIAS_CATALOGO_FORMULARIO.includes(normalizada)
+        ? normalizada
+        : "OTROS";
 
   return (
     <select
@@ -39,7 +43,7 @@ export function MedicamentoCategoriaNativeSelect({
       defaultValue={dv}
       className={cn(selectClassName, className)}
     >
-      {MEDICAMENTO_CATEGORIAS.map((value) => (
+      {CATEGORIAS_CATALOGO_FORMULARIO.map((value) => (
         <option key={value} value={value}>
           {etiquetaMedicamentoCategoria[value]}
         </option>

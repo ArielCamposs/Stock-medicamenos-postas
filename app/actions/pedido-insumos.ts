@@ -11,6 +11,7 @@ import {
 import { registrarAuditLog } from "@/lib/audit/stock-audit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { sincronizarStockInsumosDesdePedido } from "@/app/actions/stock-insumos";
+import { validarPedidoInsumosNoMismoDia } from "@/lib/posta/reglas-repeticion-dia";
 
 export type PedidoInsumosActionState = {
   error?: string | null;
@@ -194,6 +195,9 @@ export async function enviarPedidoInsumosAction(
   const supabase = await createServerSupabaseClient();
   const up = await upsertDetalleDesdeFormulario(supabase, postaId, gate.userId, formData);
   if (!up.ok) return { error: up.error };
+
+  const mismoDia = await validarPedidoInsumosNoMismoDia(supabase, postaId, up.pedidoId);
+  if (!mismoDia.ok) return { error: mismoDia.error };
 
   const { data: updRows, error: stErr } = await supabase
     .from("pedidos_insumos")

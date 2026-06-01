@@ -51,6 +51,7 @@ function filasParaTablaInteractiva(
     postaNombre: string;
     postaCodigo: string | null;
     bandejaListo: boolean;
+    tipo: "GENERAL" | "CONTRA_RECETA";
   }[]
 ) {
   return lista.map((r) => ({
@@ -72,6 +73,7 @@ function filasParaTablaInteractiva(
     bandejaListo: r.bandejaListo,
     pendienteBandeja: SET_ESTADOS_PENDIENTES_BANDEJA.has(r.estado) && !r.bandejaListo,
     puedePdf: true,
+    tipo: r.tipo,
   }));
 }
 
@@ -83,7 +85,7 @@ export default async function AdminPedidosPage() {
   const { data: rows, error } = await supabase
     .from("pedidos_mensuales")
     .select(
-      "id, anio, mes, estado, enviado_en, fecha_creacion, posta_id, admin_bandeja_listo_en"
+      "id, anio, mes, estado, tipo, enviado_en, fecha_creacion, posta_id, admin_bandeja_listo_en"
     )
     .in("estado", [...ESTADOS_TODOS])
     .order("fecha_creacion", { ascending: false });
@@ -129,12 +131,14 @@ export default async function AdminPedidosPage() {
         row.fecha_creacion === null || typeof row.fecha_creacion === "string"
           ? (row.fecha_creacion as string | null)
           : null;
+      const tipoRaw = typeof row.tipo === "string" ? row.tipo : "GENERAL";
       return {
         id: String(row.id),
         postaId,
         anio: Number(row.anio),
         mes: Number(row.mes),
         estado: String(row.estado),
+        tipo: (tipoRaw === "CONTRA_RECETA" ? "CONTRA_RECETA" : "GENERAL") as "GENERAL" | "CONTRA_RECETA",
         enviadoEn:
           row.enviado_en === null || typeof row.enviado_en === "string"
             ? (row.enviado_en as string | null)

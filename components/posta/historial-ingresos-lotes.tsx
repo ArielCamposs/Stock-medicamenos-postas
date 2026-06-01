@@ -28,8 +28,6 @@ export type IngresoLoteHistorial = {
   id: string;
   fecha: string;
   registradoEn: string;
-  tipoLabel: string;
-  referencia: string | null;
   observacion: string | null;
   lineas: IngresoLineaHistorial[];
 };
@@ -70,20 +68,10 @@ function DetalleIngresoTabla({ lote }: { lote: IngresoLoteHistorial }) {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      {(lote.referencia || lote.observacion) ? (
+      {lote.observacion ? (
         <dl className="mb-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-          {lote.referencia ? (
-            <>
-              <dt className="text-muted-foreground">Referencia</dt>
-              <dd>{lote.referencia}</dd>
-            </>
-          ) : null}
-          {lote.observacion ? (
-            <>
-              <dt className="text-muted-foreground">Observación</dt>
-              <dd>{lote.observacion}</dd>
-            </>
-          ) : null}
+          <dt className="text-muted-foreground">Observación</dt>
+          <dd>{lote.observacion}</dd>
         </dl>
       ) : null}
 
@@ -166,8 +154,6 @@ export function HistorialIngresosLotes({
           loteId: lote.id,
           fechaIngreso: formatFechaEs(lote.fecha),
           registradoEn: formatRegistradoEn(lote.registradoEn),
-          tipoLabel: lote.tipoLabel,
-          referencia: lote.referencia,
           observacion: lote.observacion,
           lineas: lote.lineas.map((l) => ({
             medNombre: l.medNombre,
@@ -206,12 +192,11 @@ export function HistorialIngresosLotes({
   return (
     <>
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[40rem] border-collapse text-sm">
+        <table className="w-full min-w-[32rem] border-collapse text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-left text-xs font-medium text-muted-foreground">
               <th className="px-3 py-3">Fecha ingreso</th>
               <th className="px-3 py-3">Registrado</th>
-              <th className="px-3 py-3">Origen</th>
               <th className="px-3 py-3">Contenido</th>
               <th className="px-3 py-3 text-right">Excel</th>
             </tr>
@@ -245,7 +230,6 @@ export function HistorialIngresosLotes({
                   <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
                     {formatRegistradoEn(lote.registradoEn)}
                   </td>
-                  <td className="px-3 py-3">{lote.tipoLabel}</td>
                   <td className="px-3 py-3 tabular-nums">
                     {todoAnulado ? (
                       <span className="text-muted-foreground">Anulado</span>
@@ -296,7 +280,7 @@ export function HistorialIngresosLotes({
               <DialogHeader className="shrink-0 border-b px-4 py-4 sm:px-5">
                 <DialogTitle>Ingreso · {formatFechaEs(seleccion.fecha)}</DialogTitle>
                 <DialogDescription>
-                  Registrado {formatRegistradoEn(seleccion.registradoEn)} · {seleccion.tipoLabel}
+                  Registrado {formatRegistradoEn(seleccion.registradoEn)}
                   {resumenSeleccion && !resumenSeleccion.nMedicamentos ? null : (
                     <>
                       {" "}

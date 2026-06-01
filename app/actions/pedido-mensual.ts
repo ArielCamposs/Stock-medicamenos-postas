@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth/session";
 import { registrarAuditLog } from "@/lib/audit/stock-audit";
 import { cantidadPedidoSegunStockReferencial } from "@/lib/domain/pedido-mensual";
+import { cargarPedidosMensualesMes } from "@/lib/posta/pedidos-mensuales-por-tipo";
 import { snapshotLedgerMesPosta, type MedLedgerMin } from "@/lib/posta/snapshot-ledger-mes-posta";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -76,30 +77,49 @@ function parseCantidadesForm(
   return { ok: true, cantidades };
 }
 
+export type TipoPedido = "GENERAL" | "CONTRA_RECETA";
+
+async function idsMedicamentosContraReceta(supabase: SupabaseSrv): Promise<Set<string>> {
+  const { data } = await supabase
+    .from("medicamentos")
+    .select("id, es_contra_receta, categoria")
+    .eq("activo", true);
+  const set = new Set<string>();
+  for (const row of data ?? []) {
+    const r = row as Record<string, unknown>;
+    if (typeof r.id !== "string") continue;
+    const esFlag = r.es_contra_receta === true;
+    const cat = typeof r.categoria === "string" ? r.categoria : "";
+    if (esFlag || cat === "CONTRA_RECETA") set.add(r.id);
+  }
+  return set;
+}
+
 async function obtenerOCrearPedidoBorrador(
   supabase: SupabaseSrv,
   postaId: string,
   anio: number,
   mes: number,
-  userId: string
+  userId: string,
+  tipo: TipoPedido
 ): Promise<{ ok: true; pedidoId: string } | { ok: false; error: string }> {
-  const { data: row } = await supabase
-    .from("pedidos_mensuales")
-    .select("id, estado")
-    .eq("posta_id", postaId)
-    .eq("anio", anio)
-    .eq("mes", mes)
-    .maybeSingle();
+  const pedidosMes = await cargarPedidosMensualesMes(supabase, postaId, anio, mes);
+  if (pedidosMes.error) {
+    return { ok: false, error: pedidosMes.error };
+  }
 
-  if (row && typeof row === "object" && "id" in row && typeof (row as { id: unknown }).id === "string") {
-    const estado = (row as { estado?: string }).estado;
+  const row = tipo === "CONTRA_RECETA" ? pedidosMes.contraReceta : pedidosMes.general;
+
+  if (row) {
+    const estado = row.estado;
     if (estado !== "BORRADOR" && estado !== "OBSERVADO") {
+      const etiqueta = tipo === "CONTRA_RECETA" ? "contra receta" : "general";
       return {
         ok: false,
-        error: "Este pedido ya no está en borrador y no se puede editar desde esta pantalla.",
+        error: `El pedido ${etiqueta} de este mes ya fue enviado.`,
       };
     }
-    return { ok: true, pedidoId: (row as { id: string }).id };
+    return { ok: true, pedidoId: row.id };
   }
 
   const { data: created, error } = await supabase
@@ -108,6 +128,7 @@ async function obtenerOCrearPedidoBorrador(
       posta_id: postaId,
       anio,
       mes,
+      tipo,
       estado: "BORRADOR",
       creado_por_usuario_id: userId,
     })
@@ -120,7 +141,15 @@ async function obtenerOCrearPedidoBorrador(
     typeof created !== "object" ||
     typeof (created as { id: unknown }).id !== "string"
   ) {
-    return { ok: false, error: error?.message ?? "No se pudo crear el pedido." };
+    const msg = error?.message ?? "No se pudo crear el pedido.";
+    if (error?.code === "23505") {
+      return {
+        ok: false,
+        error:
+          "No se pudo crear este pedido: el mes ya tiene un registro sin separar por tipo (general / contra receta). Confirma con administración que la migración correspondiente esté aplicada.",
+      };
+    }
+    return { ok: false, error: msg };
   }
   return { ok: true, pedidoId: (created as { id: string }).id };
 }
@@ -131,7 +160,8 @@ async function upsertDetalleDesdeFormulario(
   anio: number,
   mes: number,
   userId: string,
-  formData: FormData
+  formData: FormData,
+  tipo: TipoPedido
 ): Promise<{ ok: true; pedidoId: string } | { ok: false; error: string }> {
   const rawIds = formData.get("medicamento_ids_json")?.toString();
   let medicamentoIds: string[] = [];
@@ -143,8 +173,39 @@ async function upsertDetalleDesdeFormulario(
     return { ok: false, error: "Datos del formulario inválidos. Recarga la página." };
   }
 
+  const contraSet = await idsMedicamentosContraReceta(supabase);
+
+  if (tipo === "CONTRA_RECETA") {
+    medicamentoIds = medicamentoIds.filter((id) => contraSet.has(id));
+    if (medicamentoIds.length === 0) {
+      return {
+        ok: false,
+        error: "No hay medicamentos contra receta activos para este pedido.",
+      };
+    }
+  } else {
+    medicamentoIds = medicamentoIds.filter((id) => !contraSet.has(id));
+    if (medicamentoIds.length === 0) {
+      return {
+        ok: false,
+        error: "No hay medicamentos para el pedido general en el formulario.",
+      };
+    }
+  }
+
   const parsedQty = parseCantidadesForm(formData, medicamentoIds);
   if (!parsedQty.ok) return { ok: false, error: parsedQty.error };
+
+  const lineasConCantidad = medicamentoIds.filter(
+    (id) => (parsedQty.cantidades.get(id) ?? 0) > 0
+  ).length;
+  if (lineasConCantidad === 0) {
+    const etiqueta = tipo === "CONTRA_RECETA" ? "contra receta" : "general";
+    return {
+      ok: false,
+      error: `El pedido ${etiqueta} debe incluir al menos un medicamento con cantidad mayor que 0.`,
+    };
+  }
 
   const meds = await cargarMedicamentosActivosLedger(supabase);
   const medSet = new Set(meds.map((m) => m.id));
@@ -156,7 +217,7 @@ async function upsertDetalleDesdeFormulario(
 
   const snap = await snapshotLedgerMesPosta(supabase, postaId, anio, mes, meds);
 
-  const ped = await obtenerOCrearPedidoBorrador(supabase, postaId, anio, mes, userId);
+  const ped = await obtenerOCrearPedidoBorrador(supabase, postaId, anio, mes, userId, tipo);
   if (!ped.ok) return ped;
 
   const detalleRows = medicamentoIds.map((mid) => {
@@ -203,8 +264,12 @@ export async function pedidoMensualSubmitAction(
     return { error: "Mes no válido." };
   }
 
+  const tipoRaw = formData.get("tipo_pedido")?.toString().trim();
+  const tipo: TipoPedido =
+    tipoRaw === "CONTRA_RECETA" ? "CONTRA_RECETA" : "GENERAL";
+
   const supabase = await createServerSupabaseClient();
-  const up = await upsertDetalleDesdeFormulario(supabase, postaId, anio, mes, gate.userId, formData);
+  const up = await upsertDetalleDesdeFormulario(supabase, postaId, anio, mes, gate.userId, formData, tipo);
   if (!up.ok) return { error: up.error };
 
   const { data: updRows, error: stErr } = await supabase
@@ -232,12 +297,16 @@ export async function pedidoMensualSubmitAction(
     action: "pedido_mensual.enviado",
     entity: "pedidos_mensuales",
     entityId: up.pedidoId,
-    metadata: { postaId, anio, mes },
+    metadata: { postaId, anio, mes, tipo },
   });
 
   revalidatePath(`/postas/${postaId}/pedidos`);
   revalidatePath("/admin/pedidos");
-  return { ok: true, success: "Pedido enviado a administración. Puedes descargar el PDF." };
+  const etiquetaOk = tipo === "CONTRA_RECETA" ? "Pedido contra receta" : "Pedido general";
+  return {
+    ok: true,
+    success: `${etiquetaOk} enviado a administración. Puedes descargar el PDF.`,
+  };
 }
 
 export async function aprobarPedidoMensualAdminAction(

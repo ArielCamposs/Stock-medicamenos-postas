@@ -14,8 +14,6 @@ export type IngresoLoteXlsxPayload = {
   loteId: string;
   fechaIngreso: string;
   registradoEn: string;
-  tipoLabel: string;
-  referencia: string | null;
   observacion: string | null;
   lineas: IngresoLoteXlsxLinea[];
 };
@@ -38,7 +36,7 @@ export async function buildIngresoLoteXlsxBuffer(
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Medicamentos insumos postas";
   const sheet = workbook.addWorksheet("Ingreso", {
-    views: [{ state: "frozen", ySplit: 10 }],
+    views: [{ state: "frozen", ySplit: 8 }],
   });
 
   sheet.addRow(["Ingreso de stock"]);
@@ -49,8 +47,6 @@ export async function buildIngresoLoteXlsxBuffer(
     ["Código posta", payload.postaCodigo ?? "—"],
     ["Fecha ingreso", payload.fechaIngreso],
     ["Registrado", payload.registradoEn],
-    ["Origen", payload.tipoLabel],
-    ["Referencia", payload.referencia ?? "—"],
     ["Observación", payload.observacion ?? "—"],
     ["ID ingreso", payload.loteId],
   ];

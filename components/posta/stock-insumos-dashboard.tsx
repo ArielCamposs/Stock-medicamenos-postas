@@ -118,9 +118,13 @@ export function StockInsumosDashboard({
             Registra cuánto queda de cada insumo para detectar los que están por agotarse.
           </CardDescription>
         </div>
-      ) : (
+      ) : puedeEditar ? (
         <p className="text-xs text-muted-foreground">
           Registra el stock actual de cada insumo. Los que estén bajos se marcan en rojo o amarillo.
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Vista del stock actual. Para actualizar cantidades, usa la sección Insumos.
         </p>
       )}
       <StockNivelLeyenda className="shrink-0" compact />
@@ -149,9 +153,41 @@ export function StockInsumosDashboard({
       </div>
     ) : null;
 
-  const cuerpo = (
-    <form action={formAction}>
-      <input type="hidden" name="insumo_ids_json" value={insumoIdsJson} />
+  const celdaStockActual = (f: FilaStockInsumoDashboard) => {
+    if (!puedeEditar) {
+      return f.cantidad === null ? (
+        <span className="text-sm text-muted-foreground">—</span>
+      ) : (
+        <span className="text-sm font-semibold tabular-nums">
+          {f.cantidad.toLocaleString("es-CL")}
+        </span>
+      );
+    }
+    const val = valores.get(f.id) ?? "";
+    return (
+      <input
+        type="number"
+        min={0}
+        step={1}
+        name={`stock_${f.id}`}
+        value={val}
+        disabled={pending}
+        placeholder="0"
+        onChange={(e) => {
+          const v = e.target.value;
+          setValores((prev) => {
+            const next = new Map(prev);
+            next.set(f.id, v);
+            return next;
+          });
+        }}
+        className={cantInputClass}
+      />
+    );
+  };
+
+  const tablaContenido = (
+    <>
       {filasOrdenadas.length === 0 ? (
         <p className="p-8 text-center text-sm text-muted-foreground">
           Sin resultados para &ldquo;{busqueda}&rdquo;.
@@ -170,7 +206,6 @@ export function StockInsumosDashboard({
               </thead>
               <tbody className="divide-y divide-border/40">
                 {filasOrdenadas.map((f) => {
-                  const val = valores.get(f.id) ?? "";
                   const maxVal = Math.max(f.stockObjetivo, f.cantidad ?? 0, 1);
                   const disp = f.cantidad ?? 0;
                   const pct = Math.min(100, Math.round((disp / maxVal) * 100));
@@ -202,26 +237,7 @@ export function StockInsumosDashboard({
                       <td className="px-5 py-3 text-center tabular-nums text-muted-foreground">
                         {f.stockObjetivo.toLocaleString("es-CL")}
                       </td>
-                      <td className="px-5 py-3 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          name={`stock_${f.id}`}
-                          value={val}
-                          disabled={!puedeEditar || pending}
-                          placeholder="0"
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setValores((prev) => {
-                              const next = new Map(prev);
-                              next.set(f.id, v);
-                              return next;
-                            });
-                          }}
-                          className={cantInputClass}
-                        />
-                      </td>
+                      <td className="px-5 py-3 text-center">{celdaStockActual(f)}</td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex flex-col items-end gap-1.5">
                           {f.nivel === "critico" ? (
@@ -292,24 +308,7 @@ export function StockInsumosDashboard({
                   </div>
                   <div>
                     <p className="text-[10px] uppercase text-muted-foreground mb-1">Stock actual</p>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      name={`stock_${f.id}`}
-                      value={valores.get(f.id) ?? ""}
-                      disabled={!puedeEditar || pending}
-                      placeholder="0"
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setValores((prev) => {
-                          const next = new Map(prev);
-                          next.set(f.id, v);
-                          return next;
-                        });
-                      }}
-                      className={cn(cantInputClass, "max-w-none mx-0")}
-                    />
+                    {celdaStockActual(f)}
                   </div>
                 </div>
               </div>
@@ -317,17 +316,21 @@ export function StockInsumosDashboard({
           </div>
         </>
       )}
+    </>
+  );
 
+  const cuerpo = puedeEditar ? (
+    <form action={formAction}>
+      <input type="hidden" name="insumo_ids_json" value={insumoIdsJson} />
+      {tablaContenido}
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border/40 bg-muted/5 px-5 py-4">
-        {puedeEditar ? (
-          <Button type="submit" size="sm" disabled={pending || filas.length === 0}>
-            {pending ? "Guardando…" : "Guardar stock"}
-          </Button>
-        ) : (
-          <p className="text-xs text-muted-foreground">Solo lectura</p>
-        )}
+        <Button type="submit" size="sm" disabled={pending || filas.length === 0}>
+          {pending ? "Guardando…" : "Guardar stock"}
+        </Button>
       </div>
     </form>
+  ) : (
+    <div>{tablaContenido}</div>
   );
 
   if (embebido) {

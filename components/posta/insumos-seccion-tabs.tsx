@@ -40,43 +40,48 @@ export function InsumosSeccionTabs({
   return (
     <div className="space-y-4">
       <div
-        className="flex border-b border-border/60"
+        className="rounded-xl border border-border/80 bg-muted/50 p-1.5 shadow-sm sm:max-w-md"
         role="tablist"
         aria-label="Secciones de insumos"
       >
-        {TABS.map(({ id, label, Icon }) => {
-          const activa = tabActiva === id;
-          const badge =
-            id === "stock" && nStockCritico > 0 ? (
-              <span className="ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">
-                {nStockCritico}
-              </span>
-            ) : id === "pedido" && pedidoPendienteAtencion ? (
-              <span
-                className="ml-1.5 size-2 rounded-full bg-amber-500"
-                aria-label="Pedido con observación"
-              />
-            ) : null;
-          return (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={activa}
-              onClick={() => cambiarTab(id)}
-              className={cn(
-                "inline-flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 px-4 transition-all duration-150 -mb-px shrink-0",
-                activa
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Icon className="size-4 shrink-0" aria-hidden />
-              {label}
-              {badge}
-            </button>
-          );
-        })}
+        <div className="grid grid-cols-2 gap-1.5">
+          {TABS.map(({ id, label, Icon }) => {
+            const activa = tabActiva === id;
+            const badge =
+              id === "stock" && nStockCritico > 0 ? (
+                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">
+                  {nStockCritico}
+                </span>
+              ) : id === "pedido" && pedidoPendienteAtencion ? (
+                <span
+                  className="size-2 shrink-0 rounded-full bg-amber-500 ring-2 ring-amber-500/30"
+                  aria-label="Pedido con observación"
+                />
+              ) : null;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={activa}
+                onClick={() => cambiarTab(id)}
+                className={cn(
+                  "inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-150",
+                  activa
+                    ? "border border-primary/25 bg-background text-primary shadow-sm ring-1 ring-primary/15"
+                    : "border border-transparent text-muted-foreground hover:border-border/60 hover:bg-background/70 hover:text-foreground"
+                )}
+              >
+                <Icon
+                  className={cn("size-[1.125rem] shrink-0", activa ? "text-primary" : "opacity-70")}
+                  aria-hidden
+                />
+                <span>{label}</span>
+                {badge}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div role="tabpanel" hidden={tabActiva !== "stock"}>

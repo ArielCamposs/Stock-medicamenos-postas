@@ -15,6 +15,7 @@ import {
   tieneAccesoGlobalAdmin,
 } from "@/lib/auth/session";
 import { etiquetaInstanteChile24h } from "@/lib/domain/fecha-mes";
+import { postaEnvioPedidoInsumosHoy } from "@/lib/posta/reglas-repeticion-dia";
 import { nivelAlertaStock, nivelStockListadoVisual } from "@/lib/posta/admin-stock-alerta-postas";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -244,7 +245,12 @@ export default async function PostaInsumosPage({ params, searchParams }: PagePro
     const cantidadSugerida = stockConocido
       ? Math.max(0, stockObjetivo - stockActual)
       : 0;
-    const cantidadPedido = det ? det.cantidad_pedido : cantidadSugerida;
+    const cantidadPedido =
+      puedeEnviarPedido && estadoPedido === "RECIBIDO"
+        ? cantidadSugerida
+        : det
+          ? det.cantidad_pedido
+          : cantidadSugerida;
     return {
       insumoId: ins.id,
       nombre: ins.nombre,
@@ -255,6 +261,9 @@ export default async function PostaInsumosPage({ params, searchParams }: PagePro
       cantidad_pedido: cantidadPedido,
     };
   });
+
+  const pedidoEnviadoHoy =
+    puedeEnviarPedido && (await postaEnvioPedidoInsumosHoy(supabase, postaId, pedidoId));
 
   return (
     <div className="space-y-6">
@@ -303,6 +312,7 @@ export default async function PostaInsumosPage({ params, searchParams }: PagePro
             enviadoEtiqueta={enviadoEtiqueta}
             comentarioAdmin={comentarioAdmin}
             puedeEditar={puedeEnviarPedido}
+            pedidoEnviadoHoy={pedidoEnviadoHoy}
             lineas={lineasPedido}
           />
         }

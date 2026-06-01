@@ -26,6 +26,7 @@ export type AdminPedidoTablaFila = {
   bandejaListo: boolean;
   pendienteBandeja: boolean;
   puedePdf: boolean;
+  tipo: "GENERAL" | "CONTRA_RECETA";
 };
 
 type Props = {
@@ -94,6 +95,7 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
           <thead>
             <tr className="border-b bg-muted/50 text-left text-xs font-medium text-muted-foreground">
               <th className="px-3 py-3 align-middle">Posta</th>
+              <th className="px-3 py-3 align-middle">Tipo</th>
               <th className="px-3 py-3 align-middle">Mes</th>
               <th className="px-3 py-3 align-middle">Estado</th>
               <th className="px-3 py-3 align-middle">Enviado</th>
@@ -140,6 +142,15 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
                     </span>
                   ) : null}
                 </td>
+                <td className="px-3 py-3 align-middle">
+                  {r.tipo === "CONTRA_RECETA" ? (
+                    <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                      Contra receta
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">General</span>
+                  )}
+                </td>
                 <td className="px-3 py-3 align-middle capitalize">{r.mesTitulo}</td>
                 <td className="px-3 py-3 align-middle">
                   <PedidoEstadoBadge estado={r.estado} />
@@ -172,7 +183,7 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
                 <td className="px-3 py-3 align-middle text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-end gap-2">
                     <Link
-                      href={`/postas/${r.postaId}/pedidos?ym=${ymPedido(r.anio, r.mes)}&from=admin`}
+                      href={`/postas/${r.postaId}/pedidos?ym=${ymPedido(r.anio, r.mes)}&from=admin${r.tipo === "CONTRA_RECETA" ? "&tab=contra-receta" : ""}`}
                       className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8")}
                     >
                       Ver
@@ -235,6 +246,16 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
 
                   <div className="space-y-3 px-4 py-4 text-sm sm:px-5">
                     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
+                      <dt className="text-muted-foreground">Tipo</dt>
+                      <dd>
+                        {seleccion.tipo === "CONTRA_RECETA" ? (
+                          <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                            Contra receta
+                          </span>
+                        ) : (
+                          <span className="text-xs">General</span>
+                        )}
+                      </dd>
                       <dt className="text-muted-foreground">Estado</dt>
                       <dd>
                         <PedidoEstadoBadge estado={seleccion.estado} />
@@ -275,7 +296,7 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
                         </a>
                       ) : null}
                       <Link
-                        href={`/postas/${seleccion.postaId}/pedidos?ym=${ymPedido(seleccion.anio, seleccion.mes)}&from=admin`}
+                        href={`/postas/${seleccion.postaId}/pedidos?ym=${ymPedido(seleccion.anio, seleccion.mes)}&from=admin${seleccion.tipo === "CONTRA_RECETA" ? "&tab=contra-receta" : ""}`}
                         className={cn(buttonVariants({ variant: "default", size: "sm" }), "h-8")}
                       >
                         Ver en posta

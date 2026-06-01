@@ -14,8 +14,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { StockNivelLeyenda } from "@/components/posta/stock-nivel-leyenda";
 import {
+  CATEGORIAS_AGRUPACION_UI,
+  categoriaAgrupacionListado,
   etiquetaMedicamentoCategoria,
-  MEDICAMENTO_CATEGORIAS,
   type MedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
 import { cn } from "@/lib/utils";
@@ -141,16 +142,21 @@ export function StockTablaDashboard({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
-                  {MEDICAMENTO_CATEGORIAS.map((cat) => {
-                    const rows = filasFiltradas.filter((f) => f.categoria === cat);
+                  {CATEGORIAS_AGRUPACION_UI.map((cat) => {
+                    const rows = filasFiltradas.filter(
+                      (f) => categoriaAgrupacionListado(f.categoria) === cat
+                    );
                     if (rows.length === 0) return null;
                     const itemsCount = rows.length;
                     return (
                       <Fragment key={cat}>
-                        <tr className="border-b border-border bg-muted/50">
-                          <td colSpan={7} className="px-5 py-2.5 bg-muted/10">
-                            <div className="flex items-center justify-between text-xs font-bold tracking-wider text-muted-foreground uppercase">
-                              <span>{etiquetaMedicamentoCategoria[cat]}</span>
+                        <tr className="border-y-2 border-border/60 bg-muted/60">
+                          <td colSpan={7} className="px-3 py-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
+                                <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">{etiquetaMedicamentoCategoria[cat]}</span>
+                              </div>
                               <span className="font-mono text-[10px] font-semibold text-muted-foreground/80 bg-muted/95 px-2 py-0.5 rounded-full border border-border/60 normal-case tracking-normal">
                                 {itemsCount} {itemsCount === 1 ? "ítem" : "ítems"}
                               </span>
@@ -264,17 +270,22 @@ export function StockTablaDashboard({
 
             {/* Mobile Card View */}
             <div className="block md:hidden max-h-[min(70vh,36rem)] overflow-auto divide-y divide-border/60">
-              {MEDICAMENTO_CATEGORIAS.map((cat) => {
-                const rows = filasFiltradas.filter((f) => f.categoria === cat);
+              {CATEGORIAS_AGRUPACION_UI.map((cat) => {
+                const rows = filasFiltradas.filter(
+                  (f) => categoriaAgrupacionListado(f.categoria) === cat
+                );
                 if (rows.length === 0) return null;
                 const itemsCount = rows.length;
                 return (
                   <div key={cat} className="bg-muted/5">
                     {/* Header de Categoría */}
-                    <div className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm px-4 py-2 border-y border-border/40 flex items-center justify-between">
-                      <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                        {etiquetaMedicamentoCategoria[cat]}
-                      </span>
+                    <div className="sticky top-0 z-10 border-y-2 border-border/60 bg-muted/80 backdrop-blur-sm px-3 py-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
+                          {etiquetaMedicamentoCategoria[cat]}
+                        </span>
+                      </div>
                       <span className="font-mono text-[9px] font-semibold text-muted-foreground/80 bg-background px-2 py-0.5 rounded-full border border-border/60">
                         {itemsCount} {itemsCount === 1 ? "ítem" : "ítems"}
                       </span>

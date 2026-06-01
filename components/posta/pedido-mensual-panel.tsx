@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useActionState, useEffect, useRef, useState } from "react";
+import { Fragment, useActionState, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   pedidoMensualSubmitAction,
   type PedidoMensualActionState,
 } from "@/app/actions/pedido-mensual";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -27,10 +29,12 @@ import { useToast } from "@/components/providers/toast-provider";
 import { PedidoEstadoBadge } from "@/components/posta/pedido-estado-badge";
 import { StockNivelLeyenda } from "@/components/posta/stock-nivel-leyenda";
 import {
+  CATEGORIAS_AGRUPACION_UI,
+  categoriaAgrupacionListado,
   etiquetaMedicamentoCategoria,
-  MEDICAMENTO_CATEGORIAS,
   type MedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
+import type { TipoPedido } from "@/app/actions/pedido-mensual";
 import { nivelStockListadoVisual } from "@/lib/posta/admin-stock-alerta-postas";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +61,7 @@ type Props = {
   postaNombre: string | null;
   postaCodigo: string | null;
   ymQuery: string;
+  tipoPedido: TipoPedido;
   pedidoId: string | null;
   estado:
     | "BORRADOR"
@@ -99,6 +104,25 @@ function armarResumenEnvio(lineas: LineaResumenEnvio[]) {
   const conPedido = lineas.filter((l) => l.cantidadPedido > 0);
   const totalUnidades = conPedido.reduce((acc, l) => acc + l.cantidadPedido, 0);
   return { conPedido, totalUnidades, nMedicamentos: conPedido.length };
+}
+
+function normalizaBusqueda(s: string) {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function lineaCoincideBusqueda(m: PedidoMensualLineaCliente, q: string) {
+  if (!q) return true;
+  const nombre = m.nombre.toLowerCase();
+  const ci = m.codigo_interno.toLowerCase();
+  return nombre.includes(q) || ci.includes(q);
+}
+
+/** Campo editable de cantidad a pedir: fondo blanco fijo para destacar sobre la fila coloreada. */
+function claseInputCantidadPedido(tamano: "tabla" | "mobile") {
+  return cn(
+    "rounded-md border border-primary/50 bg-white px-2 text-right font-semibold tabular-nums text-foreground shadow-sm ring-1 ring-primary/20 outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 dark:border-primary/40 dark:bg-white dark:text-zinc-900",
+    tamano === "tabla" ? "h-8 w-20 text-sm" : "h-9 w-24 text-sm"
+  );
 }
 
 function clasesFilaStock(
@@ -176,7 +200,8 @@ function PedidoLineaMobileCard({
             min={0}
             step={1}
             defaultValue={m.cantidad_final}
-            className="h-9 w-24 rounded-md border border-input bg-background px-2 text-right text-sm font-semibold tabular-nums outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+            className={claseInputCantidadPedido("mobile")}
+            aria-label={`Cantidad a pedir de ${m.nombre}`}
           />
         )}
       </div>
@@ -192,6 +217,7 @@ export function PedidoMensualPanel({
   postaNombre,
   postaCodigo,
   ymQuery,
+  tipoPedido,
   pedidoId,
   estado,
   enviadoEtiqueta,
@@ -205,6 +231,12 @@ export function PedidoMensualPanel({
   const formRef = useRef<HTMLFormElement>(null);
   const submitEnviarRef = useRef<HTMLButtonElement>(null);
   const [confirmarAbierto, setConfirmarAbierto] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const queryBusqueda = useMemo(() => normalizaBusqueda(busqueda), [busqueda]);
+  const nCoincidenciasBusqueda = useMemo(
+    () => lineas.filter((l) => lineaCoincideBusqueda(l, queryBusqueda)).length,
+    [lineas, queryBusqueda]
+  );
   const [resumenEnvio, setResumenEnvio] = useState<{
     conPedido: LineaResumenEnvio[];
     totalUnidades: number;
@@ -244,7 +276,15 @@ export function PedidoMensualPanel({
     const form = formRef.current;
     if (!form) return;
     const lineasForm = resumenDesdeFormulario(form, lineas);
-    setResumenEnvio(armarResumenEnvio(lineasForm));
+    const resumenNuevo = armarResumenEnvio(lineasForm);
+    if (resumenNuevo.nMedicamentos === 0) {
+      toast(
+        "Debes pedir al menos un medicamento con cantidad mayor que 0 antes de enviar.",
+        "error"
+      );
+      return;
+    }
+    setResumenEnvio(resumenNuevo);
     setConfirmarAbierto(true);
   }
 
@@ -260,11 +300,6 @@ export function PedidoMensualPanel({
       <Card>
         <CardHeader className="border-b bg-muted/40">
           <CardTitle className="text-lg">Líneas y stock</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
-            El disponible viene del registro del mes. Ajusta la columna{" "}
-            <strong className="text-foreground">Pedido</strong> y envía a administración cuando esté listo.
-            Sólo puedes enviar <strong className="text-foreground">UN PEDIDO</strong> por mes.
-          </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {estado ? (
               <>
@@ -289,9 +324,13 @@ export function PedidoMensualPanel({
               <div className="flex items-start gap-2.5">
                 <span className="text-lg leading-none">⚠️</span>
                 <div>
-                  <h4 className="font-semibold leading-none">Pedido mensual ya realizado</h4>
+                  <h4 className="font-semibold leading-none">
+                    Pedido {tipoPedido === "CONTRA_RECETA" ? "contra receta" : "general"} ya enviado
+                  </h4>
                   <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
-                    No es posible modificar las cantidades ni volver a enviar el pedido de este mes, ya que se encuentra en estado <span className="font-bold uppercase">{estado}</span>.
+                    Este pedido ({tipoPedido === "CONTRA_RECETA" ? "contra receta" : "general"}) está en estado{" "}
+                    <span className="font-bold uppercase">{estado}</span>. Solo se puede enviar un pedido por día; si
+                    necesitas enviar otro, hazlo mañana.
                   </p>
                 </div>
               </div>
@@ -321,29 +360,77 @@ export function PedidoMensualPanel({
             <form ref={formRef} action={formAction} className="space-y-4">
               <input type="hidden" name="anio" value={anio} />
               <input type="hidden" name="mes" value={mes} />
+              <input type="hidden" name="tipo_pedido" value={tipoPedido} />
               <input
                 type="hidden"
                 name="medicamento_ids_json"
                 value={JSON.stringify(lineas.map((l) => l.medicamentoId))}
               />
 
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-0 flex-1 space-y-1.5" style={{ minWidth: "14rem" }}>
+                  <Label htmlFor={`ped-buscar-${tipoPedido}`} className="text-xs font-medium">
+                    Buscar medicamento
+                  </Label>
+                  <Input
+                    id={`ped-buscar-${tipoPedido}`}
+                    type="search"
+                    autoComplete="off"
+                    placeholder="Nombre o código interno…"
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    disabled={soloLectura}
+                  />
+                </div>
+                {queryBusqueda ? (
+                  <p className="pb-2 text-xs text-muted-foreground">
+                    {nCoincidenciasBusqueda === 0 ? (
+                      <>Sin coincidencias en este pedido.</>
+                    ) : (
+                      <>
+                        <span className="font-medium text-foreground tabular-nums">
+                          {nCoincidenciasBusqueda}
+                        </span>{" "}
+                        de {lineas.length}{" "}
+                        {lineas.length === 1 ? "medicamento" : "medicamentos"}
+                      </>
+                    )}
+                  </p>
+                ) : null}
+              </div>
+
               <div className="space-y-4 lg:hidden">
-                {MEDICAMENTO_CATEGORIAS.map((cat) => {
-                  const lineasCat = lineas.filter((l) => l.categoria === cat);
-                  if (lineasCat.length === 0) return null;
+                {CATEGORIAS_AGRUPACION_UI.map((cat) => {
+                  const lineasCat = lineas.filter(
+                    (l) => categoriaAgrupacionListado(l.categoria) === cat
+                  );
+                  const lineasCatVisibles = lineasCat.filter((l) =>
+                    lineaCoincideBusqueda(l, queryBusqueda)
+                  );
+                  if (lineasCatVisibles.length === 0) return null;
                   return (
                     <section key={`m-${cat}`} className="space-y-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {etiquetaMedicamentoCategoria[cat]}
+                      <h3 className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/70 px-3 py-2">
+                        <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
+                          {etiquetaMedicamentoCategoria[cat]}
+                        </span>
                       </h3>
                       <div className="space-y-2">
                         {lineasCat.map((m) => (
-                          <PedidoLineaMobileCard
+                          <div
                             key={m.medicamentoId}
-                            m={m}
-                            soloLectura={soloLectura}
-                            tooltipTexto={tooltipTexto}
-                          />
+                            className={cn(
+                              !lineaCoincideBusqueda(m, queryBusqueda) && "hidden"
+                            )}
+                            aria-hidden={!lineaCoincideBusqueda(m, queryBusqueda)}
+                          >
+                            <PedidoLineaMobileCard
+                              m={m}
+                              soloLectura={soloLectura}
+                              tooltipTexto={tooltipTexto}
+                            />
+                          </div>
                         ))}
                       </div>
                     </section>
@@ -368,20 +455,29 @@ export function PedidoMensualPanel({
                   </thead>
                   <tbody>
                     {(() => {
-                      return MEDICAMENTO_CATEGORIAS.map((cat) => {
-                        const lineasCat = lineas.filter((l) => l.categoria === cat);
+                      return CATEGORIAS_AGRUPACION_UI.map((cat) => {
+                        const lineasCat = lineas.filter(
+                          (l) =>
+                            categoriaAgrupacionListado(l.categoria) === cat &&
+                            lineaCoincideBusqueda(l, queryBusqueda)
+                        );
                         if (lineasCat.length === 0) return null;
                         return (
                           <Fragment key={cat}>
-                            <tr className="border-b border-border bg-muted/80">
-                              <td
-                                colSpan={7}
-                                className="px-2 py-2 text-xs font-semibold tracking-wide text-foreground"
-                              >
-                                {etiquetaMedicamentoCategoria[cat]}
+                            <tr className="border-y-2 border-border/60 bg-muted/60">
+                              <td colSpan={7} className="px-3 py-2.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
+                                  <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
+                                    {etiquetaMedicamentoCategoria[cat]}
+                                  </span>
+                                </div>
                               </td>
                             </tr>
-                            {lineasCat.map((m) => {
+                            {lineas
+                              .filter((l) => categoriaAgrupacionListado(l.categoria) === cat)
+                              .map((m) => {
+                              const visible = lineaCoincideBusqueda(m, queryBusqueda);
                               const { filaClass, claseDisponible } = clasesFilaStock(
                                 m.disponible,
                                 m.stock_critico,
@@ -392,8 +488,10 @@ export function PedidoMensualPanel({
                                   key={m.medicamentoId}
                                   className={cn(
                                     "border-b border-border/70",
-                                    filaClass
+                                    filaClass,
+                                    !visible && "hidden"
                                   )}
+                                  aria-hidden={!visible}
                                 >
                                   <td className="sticky left-0 z-[1] min-w-[10rem] bg-inherit px-2 py-1.5 align-middle shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                                     <div className="flex min-w-0 flex-col gap-0.5">
@@ -441,7 +539,8 @@ export function PedidoMensualPanel({
                                         min={0}
                                         step={1}
                                         defaultValue={m.cantidad_final}
-                                        className="h-8 w-20 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30"
+                                        className={claseInputCantidadPedido("tabla")}
+                                        aria-label={`Cantidad a pedir de ${m.nombre}`}
                                       />
                                     )}
                                   </td>
@@ -518,22 +617,15 @@ export function PedidoMensualPanel({
               </div>
               {resumen ? (
                 <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-foreground">
-                    {resumen.nMedicamentos === 0 ? (
-                      <>
-                        Todas las líneas quedan en <strong>0</strong>. ¿Quieres enviar igual un pedido sin
-                        cantidades?
-                      </>
-                    ) : (
-                      <>
-                        Vas a pedir{" "}
-                        <strong className="tabular-nums">
-                          {resumen.totalUnidades.toLocaleString("es-CL")}
-                        </strong>{" "}
-                        unidades en{" "}
-                        <strong className="tabular-nums">{resumen.nMedicamentos}</strong>{" "}
-                        {resumen.nMedicamentos === 1 ? "medicamento" : "medicamentos"}.
-                      </>
-                    )}
+                    <>
+                      Vas a pedir{" "}
+                      <strong className="tabular-nums">
+                        {resumen.totalUnidades.toLocaleString("es-CL")}
+                      </strong>{" "}
+                      unidades en{" "}
+                      <strong className="tabular-nums">{resumen.nMedicamentos}</strong>{" "}
+                      {resumen.nMedicamentos === 1 ? "medicamento" : "medicamentos"}.
+                    </>
                 </div>
               ) : null}
                 {resumen && resumen.conPedido.length > 0 ? (
@@ -569,14 +661,16 @@ export function PedidoMensualPanel({
             >
               Volver a revisar
             </Button>
-            <Button type="button" disabled={pending} onClick={confirmarEnvio}>
+            <Button
+              type="button"
+              disabled={pending || pedidoVacio}
+              onClick={confirmarEnvio}
+            >
               {pending
                 ? "Enviando…"
-                : pedidoVacio
-                  ? "Enviar pedido vacío"
-                  : esReenvioObservado
-                    ? "Reenviar pedido"
-                    : "Enviar pedido"}
+                : esReenvioObservado
+                  ? "Reenviar pedido"
+                  : "Enviar pedido"}
             </Button>
           </DialogFooter>
         </DialogContent>

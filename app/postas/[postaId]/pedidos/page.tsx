@@ -5,6 +5,7 @@ import {
   PedidoMensualPanel,
   type PedidoMensualLineaCliente,
 } from "@/components/posta/pedido-mensual-panel";
+import { PedidosTipoTabs } from "@/components/posta/pedidos-tipo-tabs";
 import {
   puedeGestionarPedidoMensualPosta,
   requirePerfilUsuario,
@@ -17,16 +18,19 @@ import {
 } from "@/lib/domain/fecha-mes";
 import {
   compararMedicamentoPorCategoriaNombre,
+  esMedicamentoContraReceta,
   normalizarMedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
+import { cargarPedidosMensualesMes } from "@/lib/posta/pedidos-mensuales-por-tipo";
 import { snapshotLedgerMesPosta } from "@/lib/posta/snapshot-ledger-mes-posta";
 import { obtenerCierreMensualPosta } from "@/lib/posta/cierre-mensual";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { TipoPedido } from "@/app/actions/pedido-mensual";
 export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ postaId: string }>;
-  searchParams: Promise<{ ym?: string; from?: string }>;
+  searchParams: Promise<{ ym?: string; from?: string; tab?: string }>;
 };
 
 function parseYm(raw: string | undefined): { anio: number; mes: number } {
@@ -37,6 +41,10 @@ function parseYm(raw: string | undefined): { anio: number; mes: number } {
     }
   }
   return anioMesActual();
+}
+
+function parseTab(raw: string | undefined): TipoPedido {
+  return raw === "contra-receta" ? "CONTRA_RECETA" : "GENERAL";
 }
 
 function toInt(v: unknown): number {
@@ -54,11 +62,27 @@ function ymParam(anio: number, mes: number) {
   return `${anio}-${String(mes).padStart(2, "0")}`;
 }
 
+type PedidoRowData = {
+  pedidoId: string | null;
+  estadoPedido:
+    | "BORRADOR"
+    | "ENVIADO"
+    | "APROBADO"
+    | "OBSERVADO"
+    | "RECHAZADO"
+    | "DESPACHADO"
+    | "RECIBIDO"
+    | null;
+  enviadoEtiqueta: string | null;
+  detalleRows: { medicamento_id: string; cantidad_sugerida: number; cantidad_final: number }[];
+};
+
 export default async function PostaPedidosPage({ params, searchParams }: PageProps) {
   const { postaId } = await params;
   const qs = await searchParams;
   const { anio, mes } = parseYm(qs?.ym);
   const ymQuery = ymParam(anio, mes);
+  const tabActiva = parseTab(qs?.tab);
 
   const ctx = await requirePerfilUsuario();
   const { profile } = ctx;
@@ -68,25 +92,19 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
   const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
   const puedeRegistrar = puedeGestionarPedido && !cierre;
 
-  const [{ data: medicamentos }, { data: pedidoRow, error: pedidoErr }, { data: postaMeta }] =
-    await Promise.all([
-      supabase
-        .from("medicamentos")
-        .select(
-          "id, nombre, codigo_interno, unidad_medida, categoria, stock_recomendado_default, stock_critico_default"
-        )
-        .eq("activo", true)
-        .order("categoria", { ascending: true })
-        .order("nombre", { ascending: true }),
-      supabase
-        .from("pedidos_mensuales")
-        .select("id, estado, anio, mes, enviado_en")
-        .eq("posta_id", postaId)
-        .eq("anio", anio)
-        .eq("mes", mes)
-        .maybeSingle(),
-      supabase.from("postas").select("nombre, codigo").eq("id", postaId).maybeSingle(),
-    ]);
+  const [{ data: medicamentos }, { data: postaMeta }] = await Promise.all([
+    supabase
+      .from("medicamentos")
+      .select(
+        "id, nombre, codigo_interno, unidad_medida, categoria, stock_recomendado_default, stock_critico_default, es_contra_receta"
+      )
+      .eq("activo", true)
+      .order("categoria", { ascending: true })
+      .order("nombre", { ascending: true }),
+    supabase.from("postas").select("nombre, codigo").eq("id", postaId).maybeSingle(),
+  ]);
+
+  const pedidosMes = await cargarPedidosMensualesMes(supabase, postaId, anio, mes);
 
   let postaNombreCabecera: string | null = null;
   let postaCodigoCabecera: string | null = null;
@@ -108,6 +126,7 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
     categoria: ReturnType<typeof normalizarMedicamentoCategoria>;
     stock_recomendado_default: number;
     stock_critico_default: number;
+    es_contra_receta: boolean;
   };
 
   const meds: MedRow[] = [];
@@ -130,6 +149,7 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
           ),
           stock_recomendado_default: toInt(r.stock_recomendado_default),
           stock_critico_default: toInt(r.stock_critico_default),
+          es_contra_receta: r.es_contra_receta === true,
         });
       }
     }
@@ -144,56 +164,87 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
     )
   );
 
-  const pedidoId =
-    pedidoRow && typeof pedidoRow === "object" && "id" in pedidoRow
-      ? String((pedidoRow as { id: string }).id)
+  // Listas separadas: general sin contra receta; contra receta solo esos medicamentos.
+  const medsContraReceta = meds.filter((m) =>
+    esMedicamentoContraReceta({ es_contra_receta: m.es_contra_receta, categoria: m.categoria })
+  );
+  const medsGeneral = meds.filter(
+    (m) => !esMedicamentoContraReceta({ es_contra_receta: m.es_contra_receta, categoria: m.categoria })
+  );
+  const hayContraReceta = medsContraReceta.length > 0;
+
+  const pedidoGeneral = {
+    id: pedidosMes.general?.id ?? null,
+    estado: pedidosMes.general?.estado ?? null,
+    enviado_en: pedidosMes.general?.enviado_en ?? null,
+  };
+  const pedidoContraReceta = {
+    id: pedidosMes.contraReceta?.id ?? null,
+    estado: pedidosMes.contraReceta?.estado ?? null,
+    enviado_en: pedidosMes.contraReceta?.enviado_en ?? null,
+  };
+
+  function buildPedidoRowData(
+    pedidoData: { id: string | null; estado: string | null; enviado_en: string | null }
+  ): Omit<PedidoRowData, "detalleRows"> {
+    const estadoRaw = pedidoData.estado;
+    const estadoPedido =
+      estadoRaw === "BORRADOR" ||
+      estadoRaw === "ENVIADO" ||
+      estadoRaw === "APROBADO" ||
+      estadoRaw === "OBSERVADO" ||
+      estadoRaw === "RECHAZADO" ||
+      estadoRaw === "DESPACHADO" ||
+      estadoRaw === "RECIBIDO"
+        ? estadoRaw
+        : null;
+    const enviadoEtiqueta = pedidoData.enviado_en
+      ? etiquetaInstanteChile24h(pedidoData.enviado_en)
       : null;
+    return {
+      pedidoId: pedidoData.id,
+      estadoPedido,
+      enviadoEtiqueta,
+    };
+  }
 
-  const estadoRaw =
-    pedidoRow && typeof pedidoRow === "object" && "estado" in pedidoRow
-      ? String((pedidoRow as { estado: string }).estado)
-      : null;
-  const estadoPedido =
-    estadoRaw === "BORRADOR" ||
-    estadoRaw === "ENVIADO" ||
-    estadoRaw === "APROBADO" ||
-    estadoRaw === "OBSERVADO" ||
-    estadoRaw === "RECHAZADO" ||
-    estadoRaw === "DESPACHADO" ||
-    estadoRaw === "RECIBIDO"
-      ? estadoRaw
-      : null;
+  const pedidoGeneralDatos = buildPedidoRowData(pedidoGeneral);
+  const pedidoContraRecetaDatos = buildPedidoRowData(pedidoContraReceta);
 
-  const enviadoEnIso =
-    pedidoRow &&
-    typeof pedidoRow === "object" &&
-    "enviado_en" in pedidoRow &&
-    (pedidoRow as { enviado_en: unknown }).enviado_en !== null &&
-    typeof (pedidoRow as { enviado_en: unknown }).enviado_en === "string"
-      ? String((pedidoRow as { enviado_en: string }).enviado_en)
-      : null;
+  // Cargar detalle de ambos pedidos en paralelo.
+  const [{ data: detalleGeneralRows }, { data: detalleContraRecetaRows }] = await Promise.all([
+    pedidoGeneral.id
+      ? supabase
+          .from("detalle_pedido_mensual")
+          .select("medicamento_id, cantidad_sugerida, cantidad_final")
+          .eq("pedido_id", pedidoGeneral.id)
+      : Promise.resolve({ data: null as null }),
+    pedidoContraReceta.id
+      ? supabase
+          .from("detalle_pedido_mensual")
+          .select("medicamento_id, cantidad_sugerida, cantidad_final")
+          .eq("pedido_id", pedidoContraReceta.id)
+      : Promise.resolve({ data: null as null }),
+  ]);
 
-  const enviadoEtiqueta = enviadoEnIso ? etiquetaInstanteChile24h(enviadoEnIso) : null;
-
-  const { data: detalleRows } = pedidoId
-    ? await supabase
-        .from("detalle_pedido_mensual")
-        .select("medicamento_id, cantidad_sugerida, cantidad_final")
-        .eq("pedido_id", pedidoId)
-    : { data: null as null };
-
-  const detallePorMed = new Map<string, { sugerida: number; final: number }>();
-  if (detalleRows && Array.isArray(detalleRows)) {
-    for (const row of detalleRows) {
-      const r = row as Record<string, unknown>;
-      if (typeof r.medicamento_id === "string") {
-        detallePorMed.set(r.medicamento_id, {
-          sugerida: toInt(r.cantidad_sugerida),
-          final: toInt(r.cantidad_final),
-        });
+  function buildDetallePorMed(rows: unknown): Map<string, { sugerida: number; final: number }> {
+    const map = new Map<string, { sugerida: number; final: number }>();
+    if (rows && Array.isArray(rows)) {
+      for (const row of rows) {
+        const r = row as Record<string, unknown>;
+        if (typeof r.medicamento_id === "string") {
+          map.set(r.medicamento_id, {
+            sugerida: toInt(r.cantidad_sugerida),
+            final: toInt(r.cantidad_final),
+          });
+        }
       }
     }
+    return map;
   }
+
+  const detalleGeneralPorMed = buildDetallePorMed(detalleGeneralRows);
+  const detalleContraRecetaPorMed = buildDetallePorMed(detalleContraRecetaRows);
 
   const snapshot = await snapshotLedgerMesPosta(
     supabase,
@@ -207,27 +258,42 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
     }))
   );
 
-  const lineas: PedidoMensualLineaCliente[] = meds.map((m) => {
-    const s = snapshot.get(m.id)!;
-    const sug = cantidadPedidoSegunStockReferencial(s.disponible, s.stock_recomendado);
-    const det = detallePorMed.get(m.id);
-    const finalVal = det ? det.final : sug;
-    return {
-      medicamentoId: m.id,
-      nombre: m.nombre,
-      codigo_interno: m.codigo_interno,
-      unidad_medida: m.unidad_medida,
-      categoria: m.categoria,
-      stock_recomendado: s.stock_recomendado,
-      stock_critico: s.stock_critico,
-      disponible: s.disponible,
-      cantidad_sugerida: sug,
-      cantidad_final: finalVal,
-    };
-  });
+  function buildLineas(
+    medsSubset: MedRow[],
+    detallePorMed: Map<string, { sugerida: number; final: number }>
+  ): PedidoMensualLineaCliente[] {
+    return medsSubset.map((m) => {
+      const s = snapshot.get(m.id) ?? {
+        disponible: 0,
+        stock_recomendado: m.stock_recomendado_default,
+        stock_critico: m.stock_critico_default,
+      };
+      const sug = cantidadPedidoSegunStockReferencial(s.disponible, s.stock_recomendado);
+      const det = detallePorMed.get(m.id);
+      const finalVal = det ? det.final : sug;
+      return {
+        medicamentoId: m.id,
+        nombre: m.nombre,
+        codigo_interno: m.codigo_interno,
+        unidad_medida: m.unidad_medida,
+        categoria: m.categoria,
+        stock_recomendado: s.stock_recomendado,
+        stock_critico: s.stock_critico,
+        disponible: s.disponible,
+        cantidad_sugerida: sug,
+        cantidad_final: finalVal,
+      };
+    });
+  }
+
+  const lineasGeneral = buildLineas(medsGeneral, detalleGeneralPorMed);
+  const lineasContraReceta = buildLineas(medsContraReceta, detalleContraRecetaPorMed);
 
   const basePath = `/postas/${postaId}/pedidos`;
-  const queryExtra = volverBandejaAdmin ? { from: "admin" } : undefined;
+  const queryExtra: Record<string, string> = {
+    tab: tabActiva === "CONTRA_RECETA" ? "contra-receta" : "general",
+    ...(volverBandejaAdmin ? { from: "admin" } : {}),
+  };
 
   return (
     <div className="space-y-6">
@@ -248,11 +314,12 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
                   <span className="ml-1.5">· código {postaCodigoCabecera}</span>
                 ) : null}
                 <span className="mt-1 block">
-                  Un pedido por posta y por mes; lo que ves acá corresponde solo a esta posta.
+                  Pedido general y pedido contra receta son independientes (uno de cada tipo por mes en esta
+                  posta).
                 </span>
               </>
             ) : (
-              "Un pedido por posta y por mes."
+              "Pedido general y contra receta por separado, por posta y por mes."
             )}
             {volverBandejaAdmin ? (
               <span className="mt-2 block rounded-md border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-950 dark:text-sky-50">
@@ -260,9 +327,9 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
                 no un pedido global.
               </span>
             ) : null}
-            {pedidoErr ? (
+            {pedidosMes.error ? (
               <span className="mt-2 block text-destructive" role="alert">
-                No se pudo cargar el pedido: {pedidoErr.message}
+                No se pudieron cargar los pedidos del mes: {pedidosMes.error}
               </span>
             ) : null}
           </>
@@ -276,20 +343,57 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
         queryExtra={queryExtra}
       />
 
-      <PedidoMensualPanel
+      <PedidosTipoTabs
         postaId={postaId}
-        anio={anio}
-        mes={mes}
-        mesTitulo={tituloMesChile(anio, mes)}
-        postaNombre={postaNombreCabecera}
-        postaCodigo={postaCodigoCabecera}
+        tabActiva={tabActiva}
         ymQuery={ymQuery}
-        pedidoId={pedidoId}
-        estado={estadoPedido}
-        enviadoEtiqueta={enviadoEtiqueta}
-        puedeEditar={puedeRegistrar}
-        lineas={lineas}
-      />
+        hayContraReceta={hayContraReceta}
+        estadoGeneral={pedidoGeneralDatos.estadoPedido}
+        estadoContraReceta={pedidoContraRecetaDatos.estadoPedido}
+        queryExtra={queryExtra}
+      >
+        {tabActiva === "CONTRA_RECETA" ? (
+          hayContraReceta ? (
+            <PedidoMensualPanel
+              key="pedido-contra-receta"
+              postaId={postaId}
+              anio={anio}
+              mes={mes}
+              mesTitulo={tituloMesChile(anio, mes)}
+              postaNombre={postaNombreCabecera}
+              postaCodigo={postaCodigoCabecera}
+              ymQuery={ymQuery}
+              tipoPedido="CONTRA_RECETA"
+              pedidoId={pedidoContraRecetaDatos.pedidoId}
+              estado={pedidoContraRecetaDatos.estadoPedido}
+              enviadoEtiqueta={pedidoContraRecetaDatos.enviadoEtiqueta}
+              puedeEditar={puedeRegistrar}
+              lineas={lineasContraReceta}
+            />
+          ) : (
+            <div className="rounded-lg border border-border bg-muted/30 px-6 py-10 text-center text-sm text-muted-foreground">
+              No hay medicamentos contra receta configurados en el catálogo activo.
+            </div>
+          )
+        ) : (
+          <PedidoMensualPanel
+            key="pedido-general"
+            postaId={postaId}
+            anio={anio}
+            mes={mes}
+            mesTitulo={tituloMesChile(anio, mes)}
+            postaNombre={postaNombreCabecera}
+            postaCodigo={postaCodigoCabecera}
+            ymQuery={ymQuery}
+            tipoPedido="GENERAL"
+            pedidoId={pedidoGeneralDatos.pedidoId}
+            estado={pedidoGeneralDatos.estadoPedido}
+            enviadoEtiqueta={pedidoGeneralDatos.enviadoEtiqueta}
+            puedeEditar={puedeRegistrar}
+            lineas={lineasGeneral}
+          />
+        )}
+      </PedidosTipoTabs>
     </div>
   );
 }

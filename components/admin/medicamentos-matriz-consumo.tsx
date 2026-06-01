@@ -1,18 +1,25 @@
 "use client";
 
 import { Dialog } from "@base-ui/react/dialog";
-import Link from "next/link";
-import { Maximize2, X } from "lucide-react";
-import { Fragment, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { FileText, Maximize2, X } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
+import { MedicamentoEditDialog } from "@/components/admin/medicamento-edit-dialog";
+import type { MedicamentoRow } from "@/components/admin/medicamento-row-form";
+import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  CATEGORIAS_AGRUPACION_UI,
+  categoriaAgrupacionListado,
+  esMedicamentoContraReceta,
   etiquetaMedicamentoCategoria,
   MEDICAMENTO_CATEGORIAS,
-  compararMedicamentoPorCategoriaNombre,
+  compararMedicamentoPorCategoriaAgrupacionNombre,
   normalizarMedicamentoCategoria,
+  type MedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
 import { nivelStockListadoVisual } from "@/lib/posta/admin-stock-alerta-postas";
 import { cn } from "@/lib/utils";
@@ -27,14 +34,33 @@ export type MedicamentoMatrizRow = {
   id: string;
   nombre: string;
   codigoInterno: string;
+  codigoAvis: string | null;
   unidadMedida: string;
   categoria: string;
   activo: boolean;
+  esContraReceta: boolean;
+  updatedAt: string;
   /** Referencia del catálogo (columna Stock) */
   stockRecomendadoDefault: number;
   /** Referencia del catálogo (columna Crít.) */
   stockCriticoDefault: number;
 };
+
+function matrizRowToMedicamentoRow(m: MedicamentoMatrizRow): MedicamentoRow {
+  return {
+    id: m.id,
+    nombre: m.nombre,
+    codigo_interno: m.codigoInterno,
+    codigo_avis: m.codigoAvis,
+    unidad_medida: m.unidadMedida,
+    categoria: normalizarMedicamentoCategoria(m.categoria),
+    stock_recomendado_default: m.stockRecomendadoDefault,
+    stock_critico_default: m.stockCriticoDefault,
+    activo: m.activo,
+    es_contra_receta: m.esContraReceta,
+    updated_at: m.updatedAt,
+  };
+}
 
 type Props = {
   /** Mes del stock mensual mostrado (MM/AAAA) */
@@ -51,6 +77,7 @@ type MatrizTablaProps = {
   medicamentosVisibles: MedicamentoMatrizRow[];
   stockFinalPorMedYPosta: Map<string, Map<string, number>>;
   puedeEditarFicha: boolean;
+  onEditarMedicamento?: (id: string) => void;
   contenedorClassName?: string;
 };
 
@@ -65,8 +92,55 @@ function normalizaBusqueda(s: string) {
 function medicamentoCoincide(m: MedicamentoMatrizRow, consulta: string) {
   const t = normalizaBusqueda(consulta);
   if (!t) return true;
-  const blob = normalizaBusqueda(`${m.nombre} ${m.codigoInterno} ${m.unidadMedida}`);
+  const cat = etiquetaMedicamentoCategoria[normalizarMedicamentoCategoria(m.categoria)];
+  const cr = esContraRecetaEnMatriz(m) ? "contra receta cr" : "";
+  const blob = normalizaBusqueda(
+    `${m.nombre} ${m.codigoInterno} ${m.unidadMedida} ${cat} ${cr}`
+  );
   return blob.includes(t);
+}
+
+function medicamentoPasaFiltroCategoria(
+  m: MedicamentoMatrizRow,
+  categoriaFiltro: MedicamentoCategoria | ""
+) {
+  if (!categoriaFiltro) return true;
+  return normalizarMedicamentoCategoria(m.categoria) === categoriaFiltro;
+}
+
+type FiltroContraReceta = "" | "contra_receta" | "general";
+
+function esContraRecetaEnMatriz(m: MedicamentoMatrizRow): boolean {
+  return esMedicamentoContraReceta({
+    es_contra_receta: m.esContraReceta,
+    categoria: m.categoria,
+  });
+}
+
+function medicamentoPasaFiltroContraReceta(
+  m: MedicamentoMatrizRow,
+  filtro: FiltroContraReceta
+) {
+  if (!filtro) return true;
+  const esCr = esContraRecetaEnMatriz(m);
+  if (filtro === "contra_receta") return esCr;
+  return !esCr;
+}
+
+function BadgeMedicamentoContraReceta({ compacto = false }: { compacto?: boolean }) {
+  return (
+    <Badge
+      variant="outline"
+      title="Incluido en el pedido mensual contra receta"
+      className={cn(
+        "shrink-0 gap-0.5 border-amber-600/45 bg-amber-500/15 font-semibold text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-100",
+        compacto ? "px-1 py-0 text-[9px] uppercase tracking-wide" : "text-[10px]"
+      )}
+    >
+      <FileText className={cn(compacto ? "size-2.5" : "size-3")} aria-hidden />
+      {compacto ? "CR" : "Contra receta"}
+    </Badge>
+  );
 }
 
 function MatrizStockTabla({
@@ -74,27 +148,23 @@ function MatrizStockTabla({
   medicamentosVisibles,
   stockFinalPorMedYPosta,
   puedeEditarFicha,
+  onEditarMedicamento,
   contenedorClassName,
 }: MatrizTablaProps) {
   const filasOrdenadas = useMemo(
     () =>
       [...medicamentosVisibles].sort((a, b) =>
-        compararMedicamentoPorCategoriaNombre(
-          normalizarMedicamentoCategoria(a.categoria),
-          a.nombre,
-          normalizarMedicamentoCategoria(b.categoria),
-          b.nombre
-        )
+        compararMedicamentoPorCategoriaAgrupacionNombre(a.categoria, a.nombre, b.categoria, b.nombre)
       ),
     [medicamentosVisibles]
   );
 
   const grupos = useMemo(() => {
-    const g: { cat: (typeof MEDICAMENTO_CATEGORIAS)[number]; meds: MedicamentoMatrizRow[] }[] =
+    const g: { cat: (typeof CATEGORIAS_AGRUPACION_UI)[number]; meds: MedicamentoMatrizRow[] }[] =
       [];
-    for (const cat of MEDICAMENTO_CATEGORIAS) {
+    for (const cat of CATEGORIAS_AGRUPACION_UI) {
       const meds = filasOrdenadas.filter(
-        (m) => normalizarMedicamentoCategoria(m.categoria) === cat
+        (m) => categoriaAgrupacionListado(m.categoria) === cat
       );
       if (meds.length > 0) g.push({ cat, meds });
     }
@@ -166,9 +236,14 @@ function MatrizStockTabla({
               <tr className="border-b border-border bg-muted/90">
                 <td
                   colSpan={4 + postas.length}
-                  className="sticky left-0 z-[28] bg-muted/95 px-2 py-2 text-xs font-semibold tracking-wide text-foreground shadow-[4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:shadow-[4px_0_12px_-4px_rgba(0,0,0,0.35)]"
+                  className="sticky left-0 z-[28] bg-muted/80 px-3 py-2.5 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:shadow-[4px_0_12px_-4px_rgba(0,0,0,0.35)]"
                 >
-                  {etiquetaMedicamentoCategoria[cat]}
+                  <div className="flex items-center gap-2">
+                    <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
+                      {etiquetaMedicamentoCategoria[cat]}
+                    </span>
+                  </div>
                 </td>
               </tr>
               {meds.map((med) => {
@@ -197,26 +272,34 @@ function MatrizStockTabla({
                       )}
                     >
                       <div className="flex min-w-0 flex-col gap-0.5">
-                        <span className="line-clamp-2 font-medium leading-snug text-foreground">
-                          {med.nombre}
-                        </span>
+                        <div className="flex flex-wrap items-start gap-1">
+                          <span className="line-clamp-2 min-w-0 flex-1 font-medium leading-snug text-foreground">
+                            {med.nombre}
+                          </span>
+                          {esContraRecetaEnMatriz(med) ? (
+                            <BadgeMedicamentoContraReceta compacto />
+                          ) : null}
+                        </div>
                         <span className="font-mono text-[10px] text-muted-foreground">
                           {med.codigoInterno} · {med.unidadMedida}
                           {!med.activo ? (
                             <span className="ml-1 text-destructive">· inactivo</span>
                           ) : null}
                         </span>
-                        {puedeEditarFicha ? (
-                          <Link
-                            href={`/admin/medicamentos/${med.id}/edit`}
+                        {puedeEditarFicha && onEditarMedicamento ? (
+                          <button
+                            type="button"
                             className={cn(
                               buttonVariants({ variant: "link", size: "sm" }),
                               "h-auto min-h-0 justify-start p-0 text-[11px] text-primary"
                             )}
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditarMedicamento(med.id);
+                            }}
                           >
-                            Editar medicamento
-                          </Link>
+                            Editar
+                          </button>
                         ) : null}
                       </div>
                     </th>
@@ -276,6 +359,11 @@ function MatrizStockTabla({
   );
 }
 
+const selectFiltroClassName = cn(
+  "h-9 w-full min-w-0 rounded-lg border border-input bg-background px-2.5 text-sm outline-none",
+  "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+);
+
 export function MedicamentosMatrizConsumo({
   mesStockEtiqueta,
   postas,
@@ -283,26 +371,175 @@ export function MedicamentosMatrizConsumo({
   stockFinalPorMedYPosta,
   puedeEditarFicha,
 }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [editarId, setEditarId] = useState<string | null>(null);
   const [consulta, setConsulta] = useState("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState<MedicamentoCategoria | "">("");
+  const [filtroContraReceta, setFiltroContraReceta] = useState<FiltroContraReceta>("");
   const inputBusquedaRef = useRef<HTMLInputElement>(null);
 
-  const medicamentosFiltrados = useMemo(
-    () => medicamentos.filter((m) => medicamentoCoincide(m, consulta)),
-    [medicamentos, consulta]
+  const totalContraReceta = useMemo(
+    () => medicamentos.filter((m) => esContraRecetaEnMatriz(m)).length,
+    [medicamentos]
   );
+
+  const editarDesdeUrl = searchParams.get("editar");
+
+  useEffect(() => {
+    if (!puedeEditarFicha || !editarDesdeUrl) return;
+    if (medicamentos.some((m) => m.id === editarDesdeUrl)) {
+      setEditarId(editarDesdeUrl);
+    }
+  }, [editarDesdeUrl, medicamentos, puedeEditarFicha]);
+
+  const medicamentoEnEdicion = useMemo(() => {
+    if (!editarId) return null;
+    const row = medicamentos.find((m) => m.id === editarId);
+    return row ? matrizRowToMedicamentoRow(row) : null;
+  }, [editarId, medicamentos]);
+
+  const abrirEdicion = (id: string) => {
+    setEditarId(id);
+  };
+
+  const cerrarEdicion = (open: boolean) => {
+    if (open) return;
+    setEditarId(null);
+    if (searchParams.get("editar")) {
+      router.replace(pathname);
+    }
+  };
+
+  const medicamentosFiltrados = useMemo(
+    () =>
+      medicamentos.filter(
+        (m) =>
+          medicamentoPasaFiltroCategoria(m, categoriaFiltro) &&
+          medicamentoPasaFiltroContraReceta(m, filtroContraReceta) &&
+          medicamentoCoincide(m, consulta)
+      ),
+    [medicamentos, consulta, categoriaFiltro, filtroContraReceta]
+  );
+
+  const hayFiltrosActivos =
+    consulta.trim() !== "" || categoriaFiltro !== "" || filtroContraReceta !== "";
 
   const matrizPropsBase = {
     postas,
     stockFinalPorMedYPosta,
     puedeEditarFicha,
+    onEditarMedicamento: puedeEditarFicha ? abrirEdicion : undefined,
   };
+
+  const renderFiltros = (scope: "main" | "modal") => (
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-md">
+        <Label htmlFor={`filtro-matriz-medicamentos-${scope}`} className="text-xs font-medium">
+          Buscar
+        </Label>
+        <Input
+          ref={scope === "modal" ? inputBusquedaRef : undefined}
+          id={`filtro-matriz-medicamentos-${scope}`}
+          type="search"
+          placeholder="Nombre, código interno o unidad…"
+          value={consulta}
+          onChange={(e) => setConsulta(e.target.value)}
+          autoComplete="off"
+        />
+      </div>
+      <div className="w-full space-y-1.5 sm:w-56">
+        <Label htmlFor={`filtro-matriz-categoria-${scope}`} className="text-xs font-medium">
+          Categoría
+        </Label>
+        <select
+          id={`filtro-matriz-categoria-${scope}`}
+          value={categoriaFiltro}
+          onChange={(e) =>
+            setCategoriaFiltro(
+              e.target.value === "" ? "" : normalizarMedicamentoCategoria(e.target.value)
+            )
+          }
+          className={selectFiltroClassName}
+        >
+          <option value="">Todas las categorías</option>
+          {MEDICAMENTO_CATEGORIAS.map((value) => (
+            <option key={value} value={value}>
+              {etiquetaMedicamentoCategoria[value]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="w-full space-y-1.5 sm:w-52">
+        <Label htmlFor={`filtro-matriz-contra-receta-${scope}`} className="text-xs font-medium">
+          Contra receta
+        </Label>
+        <select
+          id={`filtro-matriz-contra-receta-${scope}`}
+          value={filtroContraReceta}
+          onChange={(e) => {
+            const v = e.target.value;
+            setFiltroContraReceta(
+              v === "contra_receta" || v === "general" ? v : ""
+            );
+          }}
+          className={selectFiltroClassName}
+        >
+          <option value="">Todos</option>
+          <option value="contra_receta">Solo contra receta ({totalContraReceta})</option>
+          <option value="general">Solo pedido general</option>
+        </select>
+      </div>
+      {hayFiltrosActivos ? (
+        <button
+          type="button"
+          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0")}
+          onClick={() => {
+            setConsulta("");
+            setCategoriaFiltro("");
+            setFiltroContraReceta("");
+          }}
+        >
+          Limpiar filtros
+        </button>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="space-y-3">
+      {puedeEditarFicha ? (
+        <MedicamentoEditDialog
+          medicamento={medicamentoEnEdicion}
+          open={editarId !== null && medicamentoEnEdicion !== null}
+          onOpenChange={cerrarEdicion}
+        />
+      ) : null}
+      {renderFiltros("main")}
+      <p className="text-xs text-muted-foreground">
+        Mostrando {medicamentosFiltrados.length} de {medicamentos.length} medicamentos
+        {categoriaFiltro
+          ? ` · ${etiquetaMedicamentoCategoria[categoriaFiltro]}`
+          : null}
+        {filtroContraReceta === "contra_receta"
+          ? " · solo contra receta"
+          : filtroContraReceta === "general"
+            ? " · solo pedido general"
+            : null}
+        {totalContraReceta > 0 ? ` · ${totalContraReceta} contra receta en catálogo` : null}.
+      </p>
+      {totalContraReceta > 0 ? (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>Leyenda:</span>
+          <BadgeMedicamentoContraReceta compacto />
+          <span>= pedido mensual contra receta (además del general)</span>
+        </p>
+      ) : null}
       <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <Maximize2 className="size-3.5 shrink-0 opacity-70" aria-hidden />
-        Clic en la tabla para ampliarla a pantalla completa y filtrar por nombre, código o unidad.
+        Clic en la tabla para ampliarla a pantalla completa.
       </p>
 
       <Dialog.Root
@@ -322,20 +559,26 @@ export function MedicamentosMatrizConsumo({
           )}
           onKeyDown={(e) => {
             if (e.key !== "Enter" && e.key !== " ") return;
-            if ((e.target as HTMLElement).closest("a")) return;
+            if ((e.target as HTMLElement).closest("a, button")) return;
             e.preventDefault();
             setModalAbierto(true);
           }}
           onClick={(e) => {
-            if ((e.target as HTMLElement).closest("a")) return;
+            if ((e.target as HTMLElement).closest("a, button")) return;
             setModalAbierto(true);
           }}
         >
-          <MatrizStockTabla
-            {...matrizPropsBase}
-            medicamentosVisibles={medicamentos}
-            contenedorClassName="max-h-[min(78vh,920px)]"
-          />
+          {medicamentosFiltrados.length === 0 ? (
+            <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+              No hay medicamentos que coincidan con los filtros.
+            </p>
+          ) : (
+            <MatrizStockTabla
+              {...matrizPropsBase}
+              medicamentosVisibles={medicamentosFiltrados}
+              contenedorClassName="max-h-[min(78vh,920px)]"
+            />
+          )}
         </div>
 
         <Dialog.Portal>
@@ -363,7 +606,7 @@ export function MedicamentosMatrizConsumo({
                     Stock general de medicamentos
                   </Dialog.Title>
                   <Dialog.Description className="text-sm text-muted-foreground">
-                    Mes {mesStockEtiqueta}. Filtra por nombre, código interno o unidad de medida.
+                    Mes {mesStockEtiqueta}. Mismos filtros de búsqueda, categoría y contra receta que en el listado.
                   </Dialog.Description>
                 </div>
                 <Dialog.Close
@@ -379,23 +622,8 @@ export function MedicamentosMatrizConsumo({
                 </Dialog.Close>
               </div>
 
-              <div className="shrink-0 space-y-2 border-b bg-background px-4 py-3 sm:px-5">
-                <Label htmlFor="filtro-matriz-medicamentos" className="text-xs font-medium">
-                  Buscar
-                </Label>
-                <Input
-                  ref={inputBusquedaRef}
-                  id="filtro-matriz-medicamentos"
-                  type="search"
-                  placeholder="Ej.: paracetamol, código, caja…"
-                  value={consulta}
-                  onChange={(e) => setConsulta(e.target.value)}
-                  className="max-w-md"
-                  autoComplete="off"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Mostrando {medicamentosFiltrados.length} de {medicamentos.length} medicamentos.
-                </p>
+              <div className="shrink-0 border-b bg-background px-4 py-3 sm:px-5">
+                {renderFiltros("modal")}
               </div>
 
               <div className="min-h-0 min-w-0 flex-1 overflow-auto px-2 pb-4 pt-2 sm:px-4">

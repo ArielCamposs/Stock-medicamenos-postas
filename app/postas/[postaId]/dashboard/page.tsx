@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { Package, AlertTriangle, TrendingUp, Activity } from "lucide-react";
 
+import {
+  StockInsumosDashboard,
+  type FilaStockInsumoDashboard,
+} from "@/components/posta/stock-insumos-dashboard";
 import { StockTablaDashboard, type FilaStockTabla } from "@/components/posta/stock-tabla-dashboard";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -52,7 +56,9 @@ export default async function PostaDashboardPage({ params }: PageProps) {
   const ymParam = `${anio}-${String(mes).padStart(2, "0")}`;
   const descuentoMesHref = `/postas/${postaId}/descuento?ym=${ymParam}`;
 
-  const [{ data: medicamentos }, { data: curStock }, { data: movs }, { data: avisRows }] =
+  const insumosHref = `/postas/${postaId}/insumos`;
+
+  const [{ data: medicamentos }, { data: curStock }, { data: movs }, { data: avisRows }, { data: insumos }, { data: stockInsumosRows }] =
     await Promise.all([
       supabase
         .from("medicamentos")
@@ -85,6 +91,15 @@ export default async function PostaDashboardPage({ params }: PageProps) {
         .eq("posta_id", postaId)
         .eq("anio", anio)
         .eq("mes", mes),
+      supabase
+        .from("insumos")
+        .select("id, nombre, unidad_medida, stock_objetivo")
+        .eq("activo", true)
+        .order("nombre", { ascending: true }),
+      supabase
+        .from("stock_insumos_posta")
+        .select("insumo_id, cantidad")
+        .eq("posta_id", postaId),
     ]);
 
   const medsRows = medicamentos && Array.isArray(medicamentos) ? medicamentos : [];
@@ -211,6 +226,44 @@ export default async function PostaDashboardPage({ params }: PageProps) {
   const medicamentosCriticos = filasStock
     .filter((f) => f.nivel === "critico")
     .map((f) => f.nombre);
+
+  const stockInsumosPorId = new Map<string, number>();
+  if (Array.isArray(stockInsumosRows)) {
+    for (const row of stockInsumosRows) {
+      const r = row as Record<string, unknown>;
+      if (typeof r.insumo_id !== "string") continue;
+      const n = Number(r.cantidad);
+      stockInsumosPorId.set(
+        r.insumo_id,
+        Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0
+      );
+    }
+  }
+
+  const filasStockInsumos: FilaStockInsumoDashboard[] = [];
+  if (Array.isArray(insumos)) {
+    for (const row of insumos) {
+      const r = row as Record<string, unknown>;
+      if (typeof r.id !== "string" || typeof r.nombre !== "string") continue;
+      const stockObjetivo = Number(r.stock_objetivo);
+      const objetivo = Number.isFinite(stockObjetivo) ? Math.max(0, Math.trunc(stockObjetivo)) : 0;
+      const registrado = stockInsumosPorId.has(r.id);
+      const cantidad = registrado ? (stockInsumosPorId.get(r.id) ?? 0) : null;
+      const disp = cantidad ?? 0;
+      const nivel = cantidad === null ? null : nivelAlertaStock(disp, 0, objetivo);
+      const tono =
+        cantidad === null ? ("regular" as const) : nivelStockListadoVisual(disp, 0, objetivo);
+      filasStockInsumos.push({
+        id: r.id,
+        nombre: r.nombre,
+        unidad: typeof r.unidad_medida === "string" ? r.unidad_medida : "unidad",
+        stockObjetivo: objetivo,
+        cantidad,
+        nivel,
+        tono,
+      });
+    }
+  }
 
   const cards = [
     {
@@ -407,6 +460,26 @@ export default async function PostaDashboardPage({ params }: PageProps) {
       </div>
 
       <StockTablaDashboard filas={filasStock} descuentoMesHref={descuentoMesHref} />
+
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+          <p className="text-xs text-muted-foreground">
+            Stock declarado por la posta · pedidos en la sección Insumos
+          </p>
+          <Link
+            href={insumosHref}
+            className="text-xs font-semibold text-primary underline-offset-4 hover:underline"
+          >
+            Ir a Insumos
+          </Link>
+        </div>
+        <StockInsumosDashboard
+          postaId={postaId}
+          filas={filasStockInsumos}
+          puedeEditar={false}
+          embebido
+        />
+      </div>
 
       <div className="flex flex-wrap gap-3 items-center">
         <Link

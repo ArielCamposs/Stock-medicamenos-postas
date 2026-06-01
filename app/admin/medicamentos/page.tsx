@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { MedicamentosMatrizConsumo } from "@/components/admin/medicamentos-matriz-consumo";
 import { MedicamentoCreateForm } from "@/components/admin/medicamento-create-form";
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { anioMesActual, etiquetaMes } from "@/lib/domain/fecha-mes";
+import { siguienteCodigoInternoMedicamento } from "@/lib/domain/codigo-interno-medicamento";
 import {
   compararMedicamentoPorCategoriaNombre,
   normalizarMedicamentoCategoria,
@@ -43,7 +45,7 @@ export default async function AdminMedicamentosPage() {
     supabase
       .from("medicamentos")
       .select(
-        "id,nombre,codigo_interno,codigo_avis,unidad_medida,categoria,stock_recomendado_default,stock_critico_default,activo,updated_at"
+        "id,nombre,codigo_interno,codigo_avis,unidad_medida,categoria,stock_recomendado_default,stock_critico_default,activo,es_contra_receta,updated_at"
       )
       .order("categoria", { ascending: true })
       .order("nombre", { ascending: true }),
@@ -85,6 +87,7 @@ export default async function AdminMedicamentosPage() {
           stock_recomendado_default: rec,
           stock_critico_default: crit,
           activo: r.activo,
+          es_contra_receta: r.es_contra_receta === true,
           updated_at: r.updated_at,
         });
       }
@@ -151,19 +154,31 @@ export default async function AdminMedicamentosPage() {
       .set(row.posta_id, row.stock_final);
   }
 
+  const codigoInternoSugerido = siguienteCodigoInternoMedicamento(
+    medicamentos.map((m) => m.codigo_interno)
+  );
+
   const medicamentosMatriz = medicamentos.map((m) => ({
     id: m.id,
     nombre: m.nombre,
     codigoInterno: m.codigo_interno,
+    codigoAvis: m.codigo_avis,
     unidadMedida: m.unidad_medida,
     categoria: m.categoria,
     activo: m.activo,
+    esContraReceta: m.es_contra_receta,
+    updatedAt: m.updated_at,
     stockRecomendadoDefault: m.stock_recomendado_default,
     stockCriticoDefault: m.stock_critico_default,
   }));
 
   /** Medicamento + Stock + Crít. + cada posta + Total */
   const colsTotales = 4 + postasActivas.length;
+
+  const nCategoriaContraRecetaLegada = medicamentos.filter(
+    (m) => m.categoria === "CONTRA_RECETA"
+  ).length;
+  const nOtrosCatalogo = medicamentos.filter((m) => m.categoria === "OTROS").length;
 
   return (
     <div className="space-y-8">
@@ -198,6 +213,25 @@ export default async function AdminMedicamentosPage() {
         </p>
       ) : null}
 
+      {nCategoriaContraRecetaLegada > 0 ? (
+        <p className="rounded-md border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-50">
+          Hay{" "}
+          <strong className="tabular-nums">{nCategoriaContraRecetaLegada}</strong> medicamento
+          {nCategoriaContraRecetaLegada === 1 ? "" : "s"} en la categoría legada{" "}
+          <strong>Contra receta (sin presentación)</strong>. No son “Otros”: edítalos y asigna
+          Comprimidos, Frascos, etc.; el pedido contra receta se controla con el checkbox, no con
+          esa categoría.
+        </p>
+      ) : null}
+
+      {nOtrosCatalogo > 0 && canEdit ? (
+        <p className="text-xs text-muted-foreground">
+          Categoría <strong>Otros</strong> en catálogo: {nOtrosCatalogo} medicamento
+          {nOtrosCatalogo === 1 ? "" : "s"} (solo los que tienen categoría Otros guardada en base de
+          datos).
+        </p>
+      ) : null}
+
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 className="font-heading text-lg font-medium">
@@ -212,7 +246,9 @@ export default async function AdminMedicamentosPage() {
                 <DialogHeader>
                   <DialogTitle>Nuevo medicamento</DialogTitle>
                 </DialogHeader>
-                <MedicamentoCreateForm />
+                <MedicamentoCreateForm
+                  codigoInternoSugerido={codigoInternoSugerido}
+                />
               </DialogContent>
             </Dialog>
           ) : null}
@@ -233,13 +269,19 @@ export default async function AdminMedicamentosPage() {
             matriz.
           </p>
         ) : (
-          <MedicamentosMatrizConsumo
-            mesStockEtiqueta={mesStockEtiqueta}
-            postas={postasActivas}
-            medicamentos={medicamentosMatriz}
-            stockFinalPorMedYPosta={stockFinalPorMedYPosta}
-            puedeEditarFicha={canEdit}
-          />
+          <Suspense
+            fallback={
+              <p className="text-sm text-muted-foreground">Cargando matriz de medicamentos…</p>
+            }
+          >
+            <MedicamentosMatrizConsumo
+              mesStockEtiqueta={mesStockEtiqueta}
+              postas={postasActivas}
+              medicamentos={medicamentosMatriz}
+              stockFinalPorMedYPosta={stockFinalPorMedYPosta}
+              puedeEditarFicha={canEdit}
+            />
+          </Suspense>
         )}
       </section>
     </div>

@@ -10,8 +10,9 @@ import { PostaMesToolbar, tituloMesChile } from "@/components/posta/posta-mes-to
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  CATEGORIAS_AGRUPACION_UI,
+  categoriaAgrupacionListado,
   etiquetaMedicamentoCategoria,
-  MEDICAMENTO_CATEGORIAS,
   type MedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
 import { getLocalMovementsByPostaMonth } from "@/lib/offline/db";
@@ -400,13 +401,18 @@ export function ConsumoMensualPanel({
         </div>
       ) : (
         <div className="space-y-8">
-          {MEDICAMENTO_CATEGORIAS.map((cat) => {
-            const lista = medicamentosFiltrados.filter((m) => m.categoria === cat);
+          {CATEGORIAS_AGRUPACION_UI.map((cat) => {
+            const lista = medicamentosFiltrados.filter(
+              (m) => categoriaAgrupacionListado(m.categoria) === cat
+            );
             if (lista.length === 0) return null;
             return (
               <section key={cat} className="space-y-3">
-                <h3 className="border-b border-border pb-1.5 text-sm font-semibold tracking-wide text-foreground">
-                  {etiquetaMedicamentoCategoria[cat]}
+                <h3 className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/70 px-3 py-2">
+                  <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
+                    {etiquetaMedicamentoCategoria[cat]}
+                  </span>
                 </h3>
                 <div className="space-y-6">
                   {lista.map((m) => (

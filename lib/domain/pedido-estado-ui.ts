@@ -52,3 +52,8 @@ export function etiquetaPedidoEstado(estado: string): string {
   const cfg = pedidoEstadoUiConfig[estado as PedidoEstadoUi];
   return cfg?.label ?? estado.replaceAll("_", " ");
 }
+
+/** Etiqueta corta para pestañas y resúmenes. */
+export function etiquetaPedidoEstadoCorto(estado: PedidoEstadoUi): string {
+  return etiquetaPedidoEstado(estado);
+}

@@ -20,8 +20,9 @@ import {
   puedeRegistrarStockYAvisPosta,
   requirePerfilUsuario,
 } from "@/lib/auth/session";
-import { anioMesActual } from "@/lib/domain/fecha-mes";
+import { anioMesActual, fechaIngresoParaMesMovimiento } from "@/lib/domain/fecha-mes";
 import { obtenerCierreMensualPosta } from "@/lib/posta/cierre-mensual";
+import { fechasConIngresoLoteEnMes } from "@/lib/posta/reglas-repeticion-dia";
 import { snapshotLedgerMesPosta } from "@/lib/posta/snapshot-ledger-mes-posta";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -51,13 +52,6 @@ function toInt(v: unknown): number {
   return 0;
 }
 
-const ORIGEN_LABEL: Record<string, string> = {
-  COMPRA: "Compra",
-  TRASLADO: "Traslado",
-  AJUSTE: "Ajuste",
-  OTRO: "Otro",
-};
-
 export default async function PostaIngresosPage({ params, searchParams }: PageProps) {
   const { postaId } = await params;
   const qs = await searchParams;
@@ -70,7 +64,7 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
   const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
   const puedeRegistrar = puedeRegistrarPorRol && !cierre;
 
-  const [{ data: medicamentos }, { data: lotesRows }, { data: postaMeta }] = await Promise.all([
+  const [{ data: medicamentos }, { data: lotesRows }, { data: postaMeta }, { data: pedidoRow }, { data: ingresadoEstesMes }] = await Promise.all([
     supabase
       .from("medicamentos")
       .select(
@@ -84,8 +78,6 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
         `
         id,
         fecha,
-        tipo_origen,
-        referencia,
         observacion,
         created_at,
         ingresos_stock_mes (
@@ -101,6 +93,28 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
       .order("created_at", { ascending: false })
       .limit(30),
     supabase.from("postas").select("nombre, codigo").eq("id", postaId).maybeSingle(),
+    supabase
+      .from("pedidos_mensuales")
+      .select("id")
+      .eq("posta_id", postaId)
+      .eq("anio", anio)
+      .eq("mes", mes)
+      .eq("tipo", "GENERAL")
+      .in("estado", ["ENVIADO", "APROBADO", "OBSERVADO", "DESPACHADO", "RECIBIDO"])
+      .maybeSingle(),
+    // Total ingresado por medicamento en este mes (no anulado).
+    supabase
+      .from("ingresos_stock_mes")
+      .select("medicamento_id, cantidad")
+      .eq("posta_id", postaId)
+      .gte("fecha", `${anio}-${String(mes).padStart(2, "0")}-01`)
+      .lt(
+        "fecha",
+        mes === 12
+          ? `${anio + 1}-01-01`
+          : `${anio}-${String(mes + 1).padStart(2, "0")}-01`
+      )
+      .eq("anulado", false),
   ]);
 
   const postaNombre =
@@ -115,14 +129,59 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
       ? String((postaMeta as { codigo: unknown }).codigo)
       : null;
 
+  // Sumar cantidades ya ingresadas por medicamento este mes.
+  const ingresadoPorMed: Record<string, number> = {};
+  if (ingresadoEstesMes && Array.isArray(ingresadoEstesMes)) {
+    for (const row of ingresadoEstesMes) {
+      const r = row as Record<string, unknown>;
+      if (typeof r.medicamento_id === "string") {
+        ingresadoPorMed[r.medicamento_id] =
+          (ingresadoPorMed[r.medicamento_id] ?? 0) + toInt(r.cantidad);
+      }
+    }
+  }
+  const totalIngresadoMes = Object.values(ingresadoPorMed).reduce((a, b) => a + b, 0);
+
+  // Cargar detalle del pedido mensual enviado para este mes (si existe).
+  const pedidoId =
+    pedidoRow && typeof pedidoRow === "object" && "id" in pedidoRow
+      ? String((pedidoRow as { id: string }).id)
+      : null;
+
+  const cantidadPedidaPorMed: Record<string, number> = {};
+  if (pedidoId) {
+    const { data: detalleRows } = await supabase
+      .from("detalle_pedido_mensual")
+      .select("medicamento_id, cantidad_final")
+      .eq("pedido_id", pedidoId);
+    if (detalleRows && Array.isArray(detalleRows)) {
+      for (const row of detalleRows) {
+        const r = row as Record<string, unknown>;
+        if (typeof r.medicamento_id === "string") {
+          cantidadPedidaPorMed[r.medicamento_id] = toInt(r.cantidad_final);
+        }
+      }
+    }
+  }
+
   const meds =
-    medicamentos?.map((m) => ({
-      id: m.id as string,
-      nombre: m.nombre as string,
-      codigo_interno: m.codigo_interno as string,
-      codigo_avis: (m.codigo_avis as string | null) ?? null,
-      unidad_medida: String(m.unidad_medida ?? ""),
-    })) ?? [];
+    medicamentos?.map((m) => {
+      const id = m.id as string;
+      const pedida = cantidadPedidaPorMed[id] ?? 0;
+      const yaIngresada = ingresadoPorMed[id] ?? 0;
+      // La cantidad sugerida es lo que queda pendiente de recibir del pedido.
+      const cantidadSugerida = Math.max(0, pedida - yaIngresada);
+      return {
+        id,
+        nombre: m.nombre as string,
+        codigo_interno: m.codigo_interno as string,
+        codigo_avis: (m.codigo_avis as string | null) ?? null,
+        unidad_medida: String(m.unidad_medida ?? ""),
+        cantidadPedida: pedida,
+        cantidadYaIngresada: yaIngresada,
+        cantidadSugerida,
+      };
+    }) ?? [];
 
   let ledgerPorMedicamento: Record<string, LedgerIngresoFila> = {};
   if (puedeRegistrar && meds.length > 0) {
@@ -166,7 +225,6 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
 
   const lotes: IngresoLoteHistorial[] =
     lotesRows?.map((lote) => {
-      const tipo = String(lote.tipo_origen);
       const lineasRaw = lote.ingresos_stock_mes;
       const lineasArr = Array.isArray(lineasRaw) ? lineasRaw : lineasRaw ? [lineasRaw] : [];
       const lineas = lineasArr
@@ -191,14 +249,18 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
         id: String(lote.id),
         fecha: String(lote.fecha),
         registradoEn: String(lote.created_at),
-        tipoLabel: ORIGEN_LABEL[tipo] ?? tipo,
-        referencia: lote.referencia ? String(lote.referencia) : null,
         observacion: lote.observacion ? String(lote.observacion) : null,
         lineas,
       };
     }) ?? [];
 
   const basePath = `/postas/${postaId}/ingresos`;
+
+  const fechasConLote =
+    puedeRegistrar ? await fechasConIngresoLoteEnMes(supabase, postaId, anio, mes) : [];
+  const fechaApunteIngreso =
+    fechaIngresoParaMesMovimiento(mesContableYm, new Date()) ?? `${anio}-${String(mes).padStart(2, "0")}-01`;
+  const ingresoBloqueadoMismoDia = fechasConLote.includes(fechaApunteIngreso);
 
   return (
     <div className="space-y-6">
@@ -236,6 +298,10 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
               medicamentos={meds}
               mesContableYm={mesContableYm}
               ledgerPorMedicamento={ledgerPorMedicamento}
+              hayPedidoMes={pedidoId !== null}
+              totalIngresadoMes={totalIngresadoMes}
+              fechaApunteIngreso={fechaApunteIngreso}
+              ingresoBloqueadoMismoDia={ingresoBloqueadoMismoDia}
             />
           </CardContent>
         </Card>

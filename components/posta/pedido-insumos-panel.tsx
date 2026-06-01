@@ -48,6 +48,8 @@ type Props = {
   enviadoEtiqueta: string | null;
   comentarioAdmin: string | null;
   puedeEditar: boolean;
+  /** Ya se envió otro pedido hoy; no se puede enviar uno nuevo hasta mañana. */
+  pedidoEnviadoHoy: boolean;
   lineas: PedidoInsumosLineaCliente[];
 };
 
@@ -109,6 +111,7 @@ export function PedidoInsumosPanel({
   enviadoEtiqueta,
   comentarioAdmin,
   puedeEditar,
+  pedidoEnviadoHoy,
   lineas,
 }: Props) {
   const { toast } = useToast();
@@ -192,6 +195,10 @@ export function PedidoInsumosPanel({
   const insumoIdsJson = JSON.stringify(lineas.map((l) => l.insumoId));
 
   function abrirConfirmacionEnvio() {
+    if (pedidoEnviadoHoy) {
+      toast("Ya enviaste un pedido de insumos hoy. Puedes enviar otro mañana.", "error");
+      return;
+    }
     const sinStockActual = cantidades.filter((l) => {
       const raw = valores.get(l.insumoId)?.actual ?? "";
       return raw.trim() === "";
@@ -271,7 +278,14 @@ export function PedidoInsumosPanel({
 
         {recibido ? (
           <div className="rounded-md border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-600/30 dark:bg-emerald-950/20 dark:text-emerald-100">
-            El último pedido fue recibido. Puedes enviar un nuevo pedido cuando lo necesites.
+            El último pedido fue recibido. Puedes enviar un nuevo pedido cuando lo necesites; las cantidades
+            se calculan según tu stock actual (después de lo ya pedido y recibido).
+          </div>
+        ) : null}
+
+        {pedidoEnviadoHoy && esEditable ? (
+          <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:border-amber-600/30 dark:bg-amber-950/20 dark:text-amber-100">
+            Ya enviaste un pedido de insumos hoy. Puedes armar otro <strong>mañana</strong> (un envío por día).
           </div>
         ) : null}
 
@@ -448,7 +462,7 @@ export function PedidoInsumosPanel({
           <div className="flex flex-wrap items-center gap-3 justify-end pt-2">
             <Button
               type="button"
-              disabled={pendingEnviar}
+              disabled={pendingEnviar || pedidoEnviadoHoy}
               onClick={abrirConfirmacionEnvio}
             >
               Enviar pedido…

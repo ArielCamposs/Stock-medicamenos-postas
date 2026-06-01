@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useToast } from "@/components/providers/toast-provider";
 import { registrarIngresosStockLoteAction } from "@/app/actions/posta";
@@ -9,10 +9,7 @@ import type { PostaActionState } from "@/app/actions/posta";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  fechaIngresoParaMesMovimiento,
-  fechaInputHoy,
-} from "@/lib/domain/fecha-mes";
+import { fechaInputHoy } from "@/lib/domain/fecha-mes";
 import { cn } from "@/lib/utils";
 
 export type MedIngresoLoteRow = {
@@ -21,6 +18,12 @@ export type MedIngresoLoteRow = {
   codigo_interno: string;
   codigo_avis: string | null;
   unidad_medida: string;
+  /** Cantidad del pedido mensual enviado para este mes (0 si no hay pedido). */
+  cantidadPedida: number;
+  /** Cantidad ya ingresada este mes en lotes anteriores (no anulada). */
+  cantidadYaIngresada: number;
+  /** cantidadPedida - cantidadYaIngresada, mínimo 0. Valor sugerido para el input. */
+  cantidadSugerida: number;
 };
 
 /** Totales del mes contable (misma lógica que descuento / pedidos). */
@@ -34,7 +37,8 @@ function normalizaBusqueda(s: string) {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function medCoincide(m: MedIngresoLoteRow, q: string) {
+function medCoincide(m: MedIngresoLoteRow, q: string, soloPedido: boolean) {
+  if (soloPedido && m.cantidadPedida === 0) return false;
   if (!q) return true;
   const nombre = m.nombre.toLowerCase();
   const ci = m.codigo_interno.toLowerCase();
@@ -50,12 +54,23 @@ export function IngresoStockLoteForm({
   medicamentos,
   mesContableYm,
   ledgerPorMedicamento,
+  hayPedidoMes,
+  totalIngresadoMes,
+  fechaApunteIngreso,
+  ingresoBloqueadoMismoDia,
 }: {
   postaId: string;
   medicamentos: MedIngresoLoteRow[];
-  /** `YYYY-MM` alineado con la URL `?ym=`; al cambiar el mes se recarga la página con los totales correctos. */
   mesContableYm: string;
   ledgerPorMedicamento: Record<string, LedgerIngresoFila>;
+  /** True si hay un pedido mensual enviado para este mes; habilita columna y filtro. */
+  hayPedidoMes: boolean;
+  /** Suma total de unidades ya ingresadas este mes (para mostrar aviso). */
+  totalIngresadoMes: number;
+  /** Fecha que se usará al guardar (día de hoy si el mes es el actual). */
+  fechaApunteIngreso: string;
+  /** Ya hay una recepción registrada con esa fecha. */
+  ingresoBloqueadoMismoDia: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -65,56 +80,77 @@ export function IngresoStockLoteForm({
     {}
   );
 
-  const [totalModificados, setTotalModificados] = useState(0);
+  // Inicializar con las cantidades sugeridas pre-cargadas (pedido - ya ingresado).
+  const [editados, setEditados] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    for (const m of medicamentos) {
+      if (m.cantidadSugerida > 0) s.add(m.id);
+    }
+    return s;
+  });
+  const [totalUnidades, setTotalUnidades] = useState(() =>
+    medicamentos.reduce((sum, m) => sum + m.cantidadSugerida, 0)
+  );
 
-  const limpiarTodo = () => {
-    const inputs = document.querySelectorAll("input[name^='cant_']");
-    inputs.forEach((input) => {
-      if (input instanceof HTMLInputElement) {
-        input.value = "";
-      }
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const limpiarTodo = useCallback(() => {
+    const inputs = formRef.current?.querySelectorAll("input[name^='cant_']");
+    inputs?.forEach((input) => {
+      if (input instanceof HTMLInputElement) input.value = "";
     });
-    setTotalModificados(0);
-  };
+    setEditados(new Set());
+    setTotalUnidades(0);
+  }, []);
 
   useEffect(() => {
     if (state.success) {
       toast(state.success, "success");
-      const inputs = document.querySelectorAll("input[name^='cant_']");
-      inputs.forEach((input) => {
-        if (input instanceof HTMLInputElement) {
-          input.value = "";
-        }
-      });
-      setTotalModificados(0);
+      limpiarTodo();
     }
     if (state.error) toast(state.error, "error");
-  }, [state.success, state.error, toast]);
+  }, [state.success, state.error, toast, limpiarTodo]);
 
-  const handleFormChange = (e: React.FormEvent<HTMLFormElement>) => {
+  // Navegar al siguiente input de cantidad al presionar Enter.
+  const handleKeyDownCant = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const form = formRef.current;
+    if (!form) return;
+    const inputs = Array.from(form.querySelectorAll<HTMLInputElement>("input[name^='cant_']"));
+    const idx = inputs.indexOf(e.currentTarget);
+    if (idx >= 0 && idx < inputs.length - 1) {
+      inputs[idx + 1].focus();
+      inputs[idx + 1].select();
+    }
+  }, []);
+
+  const handleFormChange = useCallback((e: React.FormEvent<HTMLFormElement>) => {
     const form = e.currentTarget;
     const formData = new FormData(form);
-    let count = 0;
+    const nuevosEditados = new Set<string>();
+    let unidades = 0;
     for (const [key, value] of formData.entries()) {
-      if (key.startsWith("cant_") && value && Number(value) > 0) {
-        count++;
+      if (key.startsWith("cant_")) {
+        const n = Number(value);
+        if (n > 0) {
+          nuevosEditados.add(key.slice(5));
+          unidades += n;
+        }
       }
     }
-    if (count !== totalModificados) {
-      setTotalModificados(count);
-    }
-  };
+    setEditados(nuevosEditados);
+    setTotalUnidades(unidades);
+  }, []);
 
-  const fechaApunte = useMemo(() => {
-    const f = fechaIngresoParaMesMovimiento(mesContableYm, new Date());
-    return f ?? fechaInputHoy();
-  }, [mesContableYm]);
+  const fechaApunte = fechaApunteIngreso;
 
   const [busqueda, setBusqueda] = useState("");
+  const [soloPedido, setSoloPedido] = useState(false);
   const query = useMemo(() => normalizaBusqueda(busqueda), [busqueda]);
   const filtrados = useMemo(
-    () => medicamentos.filter((m) => medCoincide(m, query)),
-    [medicamentos, query]
+    () => medicamentos.filter((m) => medCoincide(m, query, soloPedido)),
+    [medicamentos, query, soloPedido]
   );
 
   const idsJson = useMemo(
@@ -122,8 +158,19 @@ export function IngresoStockLoteForm({
     [medicamentos]
   );
 
+  // Filas del pedido que el usuario aún no ha llenado.
+  const pendiendosPedido = useMemo(() => {
+    if (!hayPedidoMes) return 0;
+    return medicamentos.filter(
+      (m) => m.cantidadPedida > 0 && !editados.has(m.id)
+    ).length;
+  }, [medicamentos, editados, hayPedidoMes]);
+
+  const totalModificados = editados.size;
+
   return (
     <form
+      ref={formRef}
       action={formAction}
       onChange={handleFormChange}
       className={cn("flex flex-col gap-4", totalModificados > 0 && "pb-24")}
@@ -149,7 +196,7 @@ export function IngresoStockLoteForm({
         </p>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="ing-lote-mes">Mes del ingreso</Label>
           <Input
@@ -164,29 +211,6 @@ export function IngresoStockLoteForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="ing-tipo-origen">Origen</Label>
-          <select
-            id="ing-tipo-origen"
-            name="tipo_origen"
-            defaultValue="OTRO"
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <option value="COMPRA">Compra</option>
-            <option value="TRASLADO">Traslado</option>
-            <option value="AJUSTE">Ajuste</option>
-            <option value="OTRO">Otro</option>
-          </select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="ing-referencia">Referencia</Label>
-          <Input
-            id="ing-referencia"
-            name="referencia"
-            maxLength={500}
-            placeholder="Guía, folio, origen…"
-          />
-        </div>
-        <div className="space-y-2">
           <Label htmlFor="ing-observacion">Observación</Label>
           <Input
             id="ing-observacion"
@@ -198,8 +222,8 @@ export function IngresoStockLoteForm({
       </div>
 
       {medicamentos.length > 0 ? (
-        <div className="space-y-2">
-          <div className="mx-auto max-w-xl space-y-1.5 sm:max-w-none">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-0 flex-1 space-y-1.5" style={{ minWidth: "14rem" }}>
             <Label htmlFor="ing-buscar-med" className="text-xs font-medium">
               Buscar medicamento
             </Label>
@@ -212,22 +236,55 @@ export function IngresoStockLoteForm({
               onChange={(e) => setBusqueda(e.target.value)}
             />
           </div>
+          {hayPedidoMes ? (
+            <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted/50 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/5">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={soloPedido}
+                onChange={(e) => setSoloPedido(e.target.checked)}
+              />
+              <span className="font-medium">Solo ítems del pedido</span>
+            </label>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Resumen en tiempo real */}
+      {ingresoBloqueadoMismoDia ? (
+        <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300">
+          <span className="mt-0.5 text-base leading-none">📅</span>
+          <div>
+            <strong>Ya registraste una recepción hoy</strong> ({fechaApunte}).
+            {" "}Puedes volver a ingresar lo pendiente del pedido <strong>mañana u otro día</strong>.
+            {" "}Revisa el historial de abajo si necesitas ver lo ya cargado.
+          </div>
+        </div>
+      ) : totalIngresadoMes > 0 ? (
+        <div className="flex items-start gap-2.5 rounded-lg border border-sky-500/35 bg-sky-500/8 px-3 py-2.5 text-xs text-sky-800 dark:text-sky-300">
+          <span className="mt-0.5 text-base leading-none">📦</span>
+          <div>
+            <strong>Puedes registrar otra recepción</strong> ({totalIngresadoMes.toLocaleString("es-CL")} unidades ya ingresadas este mes).
+            {" "}La columna <strong>Ingresado</strong> muestra lo recibido; <strong>Recibido</strong> trae lo que falta del pedido.
+            {hayPedidoMes
+              ? " Solo una carga por día calendario."
+              : " Registra solo lo que llegó en esta carga."}
+          </div>
+        </div>
+      ) : hayPedidoMes && medicamentos.some((m) => m.cantidadPedida > 0) ? (
+        <div className="flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/8 px-3 py-2 text-xs text-sky-800 dark:text-sky-300">
+          <span className="text-base">📋</span>
+          <span>
+            Los campos <strong>Recibido</strong> están pre-cargados con las cantidades del pedido.
+            Ajusta solo lo que difiera de lo que llegó realmente.
+          </span>
         </div>
       ) : null}
 
       {medicamentos.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-8 py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg bg-muted/5">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground/70 mb-4 border border-border/40">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="size-7"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="size-7">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
               <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
               <line x1="12" y1="22.08" x2="12" y2="12" />
@@ -241,16 +298,7 @@ export function IngresoStockLoteForm({
       ) : filtrados.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-8 py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg bg-muted/5 animate-fade-in">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/5 text-primary/70 mb-4 border border-primary/10">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="size-7 text-primary/60"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="size-7 text-primary/60">
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.3-4.3" />
               <path d="M8 11h6" />
@@ -266,39 +314,57 @@ export function IngresoStockLoteForm({
           <table className="w-full min-w-[42rem] border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/90 text-left text-xs font-medium text-muted-foreground">
-                <th className="sticky top-0 z-10 bg-muted/95 px-2 py-2">Medicamento</th>
-                <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap">
+                <th className="sticky top-0 z-10 bg-muted/95 px-2 py-2 backdrop-blur">Medicamento</th>
+                <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur">
                   Stock ref.
                 </th>
-                <th className="sticky top-0 z-10 w-[3.5rem] bg-muted/95 px-1 py-2 text-right">
+                <th className="sticky top-0 z-10 w-[3.5rem] bg-muted/95 px-1 py-2 text-right backdrop-blur">
                   Crít.
                 </th>
-                <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap">
+                <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur">
                   Disponible
                 </th>
-                <th className="sticky top-0 z-10 w-[7rem] bg-muted/95 px-2 py-2 text-center">
-                  Cantidad
+                {hayPedidoMes ? (
+                  <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur text-sky-700 dark:text-sky-400">
+                    Pedido
+                  </th>
+                ) : null}
+                {totalIngresadoMes > 0 ? (
+                  <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur text-amber-700 dark:text-amber-400">
+                    Ingresado
+                  </th>
+                ) : null}
+                <th className="sticky top-0 z-10 w-[7rem] bg-muted/95 px-2 py-2 text-center backdrop-blur">
+                  Recibido
                 </th>
               </tr>
             </thead>
             <tbody>
-              {filtrados.map((m, idx) => {
-                const rowBg = idx % 2 === 1 ? "bg-muted/20" : "bg-background";
+              {filtrados.map((m) => {
                 const L = ledgerPorMedicamento[m.id];
                 const bajoCritico =
                   L !== undefined &&
                   L.stock_critico > 0 &&
                   L.disponible <= L.stock_critico;
+                const editado = editados.has(m.id);
+                const pendientePedido =
+                  hayPedidoMes && m.cantidadPedida > 0 && !editado;
+
                 return (
                   <tr
                     key={m.id}
                     className={cn(
-                      "border-b border-border/70",
-                      rowBg,
-                      bajoCritico && "bg-amber-500/10 dark:bg-amber-500/15"
+                      "border-b border-border/70 transition-colors",
+                      editado
+                        ? "border-l-2 border-l-emerald-500 bg-emerald-500/8 dark:bg-emerald-500/10"
+                        : pendientePedido
+                          ? "border-l-2 border-l-sky-400/60 bg-sky-500/5"
+                          : bajoCritico
+                            ? "bg-amber-500/10 dark:bg-amber-500/15"
+                            : "odd:bg-muted/20"
                     )}
                   >
-                    <td className={cn("px-2 py-1.5 align-middle", rowBg)}>
+                    <td className="px-2 py-1.5 align-middle">
                       <div className="flex min-w-0 flex-col gap-0.5">
                         <span className="font-medium leading-snug">{m.nombre}</span>
                         <span className="font-mono text-[11px] text-muted-foreground">
@@ -309,30 +375,49 @@ export function IngresoStockLoteForm({
                         </span>
                       </div>
                     </td>
-                    <td className={cn("px-1 py-1.5 text-right tabular-nums", rowBg)}>
+                    <td className="px-1 py-1.5 text-right tabular-nums">
                       {L?.stock_recomendado ?? "—"}
                     </td>
-                    <td className={cn("px-1 py-1.5 text-right tabular-nums", rowBg)}>
+                    <td className="px-1 py-1.5 text-right tabular-nums">
                       {L?.stock_critico ?? "—"}
                     </td>
                     <td
                       className={cn(
                         "px-1 py-1.5 text-right font-medium tabular-nums",
-                        rowBg,
                         bajoCritico && "text-amber-900 dark:text-amber-100"
                       )}
                     >
                       {L?.disponible ?? "—"}
                     </td>
-                    <td className={cn("p-1 align-middle", rowBg)}>
+                    {hayPedidoMes ? (
+                      <td className="px-1 py-1.5 text-right tabular-nums text-sky-700 dark:text-sky-400 font-medium">
+                        {m.cantidadPedida > 0 ? m.cantidadPedida : (
+                          <span className="text-muted-foreground/40 font-normal">—</span>
+                        )}
+                      </td>
+                    ) : null}
+                    {totalIngresadoMes > 0 ? (
+                      <td className="px-1 py-1.5 text-right tabular-nums font-medium text-amber-700 dark:text-amber-400">
+                        {m.cantidadYaIngresada > 0 ? m.cantidadYaIngresada : (
+                          <span className="text-muted-foreground/30 font-normal">—</span>
+                        )}
+                      </td>
+                    ) : null}
+                    <td className="p-1 align-middle">
                       <input
                         type="number"
                         name={`cant_${m.id}`}
-                        min={1}
+                        min={0}
                         step={1}
                         placeholder="—"
-                        className={cantInputClass}
-                        aria-label={`Cantidad ingresada de ${m.nombre}`}
+                        defaultValue={m.cantidadSugerida > 0 ? m.cantidadSugerida : undefined}
+                        className={cn(
+                          cantInputClass,
+                          editado && "border-emerald-500/60 bg-emerald-500/5 font-semibold"
+                        )}
+                        aria-label={`Cantidad recibida de ${m.nombre}`}
+                        onFocus={(e) => e.target.select()}
+                        onKeyDown={handleKeyDownCant}
                       />
                     </td>
                   </tr>
@@ -350,17 +435,28 @@ export function IngresoStockLoteForm({
       )}
 
       {totalModificados > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-md py-4 px-6 shadow-xl animate-in slide-in-from-bottom duration-200">
-          <div className="mx-auto max-w-7xl flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
-                {totalModificados}
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-md py-3 px-5 shadow-xl animate-in slide-in-from-bottom duration-200">
+          <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className="flex items-center gap-1.5">
+                <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
+                  {totalModificados}
+                </span>
+                <span className="text-muted-foreground">
+                  {totalModificados === 1 ? "medicamento" : "medicamentos"}
+                </span>
               </span>
-              <p className="text-sm font-medium text-muted-foreground">
-                {totalModificados === 1
-                  ? "medicamento con cantidad ingresada"
-                  : "medicamentos con cantidades ingresadas"}
-              </p>
+              <span className="text-muted-foreground">
+                <strong className="text-foreground tabular-nums">{totalUnidades}</strong>{" "}
+                unidades totales
+              </span>
+              {pendiendosPedido > 0 ? (
+                <span className="text-sky-700 dark:text-sky-400">
+                  <strong className="tabular-nums">{pendiendosPedido}</strong> del pedido sin completar
+                </span>
+              ) : hayPedidoMes && pendiendosPedido === 0 && medicamentos.filter((m) => m.cantidadPedida > 0).length > 0 ? (
+                <span className="text-emerald-700 dark:text-emerald-400 font-medium">✓ Pedido completo</span>
+              ) : null}
             </div>
             <div className="flex items-center gap-3">
               <Button
@@ -373,7 +469,11 @@ export function IngresoStockLoteForm({
               >
                 Limpiar todo
               </Button>
-              <Button type="submit" disabled={pending} className="h-9 px-4 shadow-sm hover:shadow-md transition-all font-semibold">
+              <Button
+                type="submit"
+                disabled={pending || ingresoBloqueadoMismoDia}
+                className="h-9 px-4 shadow-sm hover:shadow-md transition-all font-semibold"
+              >
                 {pending ? "Guardando…" : `Registrar ingreso (${totalModificados})`}
               </Button>
             </div>

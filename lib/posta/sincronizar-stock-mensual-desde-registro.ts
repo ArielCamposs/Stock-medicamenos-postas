@@ -33,65 +33,78 @@ export async function sincronizarStockMensualDesdeRegistro(
   anio: number,
   mes: number
 ): Promise<{ error?: string }> {
-  const { anio: ap, mes: mp } = mesAnterior(anio, mes);
-  const agg = await cargarAgregadosIngresoConsumoPorMedicamentos(supabase, postaId, [
-    medicamentoId,
-  ]);
-  const cierrePrev = cierreFinDeMesAcumulado(agg, medicamentoId, ap, mp);
-  const ymk = ymKey(anio, mes);
-  const totIng = agg.get(medicamentoId)?.ingPorMes.get(ymk) ?? 0;
-  const totCons = agg.get(medicamentoId)?.consPorMes.get(ymk) ?? 0;
-  const stockFinal = Math.max(0, cierrePrev + totIng - totCons);
+  return sincronizarStockMensualLote(supabase, postaId, [medicamentoId], anio, mes);
+}
 
-  const [{ data: stockRow }, { data: med, error: eMed }] = await Promise.all([
-    supabase
-      .from("stock_mensual_posta")
-      .select("id, stock_critico_config, stock_recomendado_config")
-      .eq("posta_id", postaId)
-      .eq("medicamento_id", medicamentoId)
-      .eq("anio", anio)
-      .eq("mes", mes)
-      .maybeSingle(),
+/**
+ * Versión en lote: recalcula `stock_mensual_posta` para varios medicamentos en una sola pasada.
+ * Usa mucho menos round-trips que llamar a `sincronizarStockMensualDesdeRegistro` N veces.
+ */
+export async function sincronizarStockMensualLote(
+  supabase: SupabaseSrv,
+  postaId: string,
+  medicamentoIds: string[],
+  anio: number,
+  mes: number
+): Promise<{ error?: string }> {
+  if (medicamentoIds.length === 0) return {};
+
+  const { anio: ap, mes: mp } = mesAnterior(anio, mes);
+  const ymk = ymKey(anio, mes);
+
+  // Una sola llamada para obtener todos los agregados de todos los medicamentos.
+  const [agg, { data: medsData, error: eMeds }, { data: stockRows }] = await Promise.all([
+    cargarAgregadosIngresoConsumoPorMedicamentos(supabase, postaId, medicamentoIds),
     supabase
       .from("medicamentos")
-      .select("stock_recomendado_default, stock_critico_default")
-      .eq("id", medicamentoId)
-      .maybeSingle(),
+      .select("id, stock_recomendado_default, stock_critico_default")
+      .in("id", medicamentoIds),
+    supabase
+      .from("stock_mensual_posta")
+      .select("id, medicamento_id, stock_critico_config, stock_recomendado_config")
+      .eq("posta_id", postaId)
+      .in("medicamento_id", medicamentoIds)
+      .eq("anio", anio)
+      .eq("mes", mes),
   ]);
 
-  if (eMed || !med || typeof med !== "object") {
-    return { error: "No se encontró el medicamento." };
+  if (eMeds || !medsData) return { error: "No se encontraron los medicamentos." };
+
+  // Índices para acceso O(1).
+  const medDefaults = new Map<string, { rec: number; crit: number }>();
+  for (const m of medsData) {
+    const r = m as Record<string, unknown>;
+    if (typeof r.id !== "string") continue;
+    const rec = Number(r.stock_recomendado_default);
+    const crit = Number(r.stock_critico_default);
+    medDefaults.set(r.id, {
+      rec: Number.isFinite(rec) ? Math.max(0, Math.trunc(rec)) : 0,
+      crit: Number.isFinite(crit) ? Math.max(0, Math.trunc(crit)) : 0,
+    });
   }
 
-  const recDef = Number(
-    (med as { stock_recomendado_default?: number }).stock_recomendado_default
-  );
-  const critDef = Number(
-    (med as { stock_critico_default?: number }).stock_critico_default
-  );
-  const recVal = Number.isFinite(recDef) ? Math.max(0, Math.trunc(recDef)) : 0;
-  const critVal = Number.isFinite(critDef) ? Math.max(0, Math.trunc(critDef)) : 0;
+  const stockExistente = new Map<string, { id: string; recCfg: number; critCfg: number }>();
+  if (stockRows) {
+    for (const s of stockRows) {
+      const r = s as Record<string, unknown>;
+      if (typeof r.id !== "string" || typeof r.medicamento_id !== "string") continue;
+      stockExistente.set(r.medicamento_id, {
+        id: r.id,
+        recCfg: Number(r.stock_recomendado_config),
+        critCfg: Number(r.stock_critico_config),
+      });
+    }
+  }
 
-  if (stockRow && typeof stockRow === "object" && "id" in stockRow) {
-    const critCfg = Number(
-      (stockRow as { stock_critico_config: number }).stock_critico_config
-    );
-    const recCfg = Number(
-      (stockRow as { stock_recomendado_config: number }).stock_recomendado_config
-    );
-    const { error } = await supabase
-      .from("stock_mensual_posta")
-      .update({
-        stock_inicial: cierrePrev,
-        stock_ingresado_mes: totIng,
-        stock_final: stockFinal,
-        stock_critico_config: Number.isFinite(critCfg) ? critCfg : critVal,
-        stock_recomendado_config: Number.isFinite(recCfg) ? recCfg : recVal,
-      })
-      .eq("id", (stockRow as { id: string }).id);
-    if (error) return { error: error.message };
-  } else {
-    const { error } = await supabase.from("stock_mensual_posta").insert({
+  // Calcular y upsert en batch.
+  const upsertRows = medicamentoIds.map((medicamentoId) => {
+    const cierrePrev = cierreFinDeMesAcumulado(agg, medicamentoId, ap, mp);
+    const totIng = agg.get(medicamentoId)?.ingPorMes.get(ymk) ?? 0;
+    const totCons = agg.get(medicamentoId)?.consPorMes.get(ymk) ?? 0;
+    const stockFinal = Math.max(0, cierrePrev + totIng - totCons);
+    const defaults = medDefaults.get(medicamentoId) ?? { rec: 0, crit: 0 };
+    const existente = stockExistente.get(medicamentoId);
+    return {
       posta_id: postaId,
       medicamento_id: medicamentoId,
       anio,
@@ -99,11 +112,19 @@ export async function sincronizarStockMensualDesdeRegistro(
       stock_inicial: cierrePrev,
       stock_ingresado_mes: totIng,
       stock_final: stockFinal,
-      stock_critico_config: critVal,
-      stock_recomendado_config: recVal,
-    });
-    if (error) return { error: error.message };
-  }
+      stock_critico_config: existente
+        ? (Number.isFinite(existente.critCfg) ? existente.critCfg : defaults.crit)
+        : defaults.crit,
+      stock_recomendado_config: existente
+        ? (Number.isFinite(existente.recCfg) ? existente.recCfg : defaults.rec)
+        : defaults.rec,
+    };
+  });
 
+  const { error } = await supabase
+    .from("stock_mensual_posta")
+    .upsert(upsertRows, { onConflict: "posta_id,medicamento_id,anio,mes" });
+
+  if (error) return { error: error.message };
   return {};
 }
