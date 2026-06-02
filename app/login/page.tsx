@@ -3,9 +3,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { signOutAction } from "@/app/actions/auth";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { LoginForm } from "@/components/auth/login-form";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   getSessionContext,
   tieneAccesoGlobalAdmin,
@@ -122,11 +122,12 @@ export default async function LoginPage({ searchParams }: PageProps) {
         <LoginForm redirectTo={redirectTo} errorCodigo={errorCodigoForm} />
 
         {necesitaCerrarSesion ? (
-          <form action={signOutAction} className="mx-auto w-full min-w-0 max-w-md">
-            <Button type="submit" variant="outline" className="w-full">
-              Cerrar sesión e intentar con otra cuenta
-            </Button>
-          </form>
+          <SignOutButton
+            label="Cerrar sesión e intentar con otra cuenta"
+            description="Cerrarás la sesión actual para poder ingresar con otra cuenta."
+            fullWidth
+            wrapperClassName="mx-auto w-full min-w-0 max-w-md"
+          />
         ) : null}
 
         <Link

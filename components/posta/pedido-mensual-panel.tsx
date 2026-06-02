@@ -74,6 +74,8 @@ type Props = {
     | null;
   /** Texto ya formateado en el servidor (evita hydration mismatch con `toLocaleString` en el cliente). */
   enviadoEtiqueta: string | null;
+  pedidoEnviadoHoy: boolean;
+  pedidoEnProceso: boolean;
   puedeEditar: boolean;
   lineas: PedidoMensualLineaCliente[];
 };
@@ -221,13 +223,23 @@ export function PedidoMensualPanel({
   pedidoId,
   estado,
   enviadoEtiqueta,
+  pedidoEnviadoHoy,
+  pedidoEnProceso,
   puedeEditar,
   lineas,
 }: Props) {
   const router = useRouter();
+  const esFormularioNuevo = estado === null;
+  const esEditableEstado = estado === "BORRADOR" || estado === "OBSERVADO";
   const tooltipTexto = !puedeEditar
     ? "No se puede editar: el periodo mensual está cerrado o no tienes permisos."
-    : "No se puede editar: el pedido mensual ya fue realizado y enviado.";
+    : pedidoEnProceso
+      ? "No se puede editar: hay un pedido en trámite con administración."
+      : pedidoEnviadoHoy
+        ? "No se puede editar: ya enviaste un pedido de este tipo hoy."
+        : !esFormularioNuevo && !esEditableEstado
+          ? "No se puede editar: el pedido ya fue enviado."
+          : "No se puede editar.";
   const formRef = useRef<HTMLFormElement>(null);
   const submitEnviarRef = useRef<HTMLButtonElement>(null);
   const [confirmarAbierto, setConfirmarAbierto] = useState(false);
@@ -264,11 +276,9 @@ export function PedidoMensualPanel({
 
   const soloLectura =
     !puedeEditar ||
-    estado === "ENVIADO" ||
-    estado === "APROBADO" ||
-    estado === "RECHAZADO" ||
-    estado === "DESPACHADO" ||
-    estado === "RECIBIDO";
+    pedidoEnProceso ||
+    pedidoEnviadoHoy ||
+    (!esFormularioNuevo && !esEditableEstado);
   const puedePdf = Boolean(pedidoId) && estado !== "BORRADOR" && estado !== null;
   const esReenvioObservado = estado === "OBSERVADO";
 
@@ -312,28 +322,49 @@ export function PedidoMensualPanel({
               </>
             ) : (
               <span className="text-xs text-muted-foreground">
-                Todavía no hay pedido registrado para este mes.
+                Nuevo pedido para este mes. Puedes enviar uno por día calendario de este tipo.
               </span>
             )}
           </div>
           <StockNivelLeyenda className="mt-3" compact />
         </CardHeader>
         <CardContent className="pt-4">
-          {estado !== "BORRADOR" && estado !== "OBSERVADO" && estado !== null ? (
+          {pedidoEnProceso ? (
             <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20 p-4 text-sm text-amber-800 dark:text-amber-300">
               <div className="flex items-start gap-2.5">
                 <span className="text-lg leading-none">⚠️</span>
                 <div>
                   <h4 className="font-semibold leading-none">
-                    Pedido {tipoPedido === "CONTRA_RECETA" ? "contra receta" : "general"} ya enviado
+                    Pedido {tipoPedido === "CONTRA_RECETA" ? "contra receta" : "general"} en trámite
                   </h4>
                   <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
-                    Este pedido ({tipoPedido === "CONTRA_RECETA" ? "contra receta" : "general"}) está en estado{" "}
-                    <span className="font-bold uppercase">{estado}</span>. Solo se puede enviar un pedido por día; si
-                    necesitas enviar otro, hazlo mañana.
+                    Este pedido está en estado{" "}
+                    <span className="font-bold uppercase">{estado}</span>. Cuando administración lo cierre
+                    (recibido o rechazado), podrás enviar otro si lo necesitas.
                   </p>
                 </div>
               </div>
+            </div>
+          ) : null}
+
+          {pedidoEnviadoHoy && !pedidoEnProceso && puedeEditar ? (
+            <div className="mb-4 rounded-md border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:border-amber-600/30 dark:bg-amber-950/20 dark:text-amber-100">
+              Ya enviaste un pedido {tipoPedido === "CONTRA_RECETA" ? "contra receta" : "general"} hoy. Puedes
+              enviar otro <strong>mañana</strong> (un envío por día calendario de cada tipo).
+            </div>
+          ) : null}
+
+          {estado === "RECHAZADO" && !pedidoEnviadoHoy && !pedidoEnProceso && puedeEditar ? (
+            <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              El pedido anterior fue rechazado. Cuando puedas (un envío por día), completa el formulario y
+              envía uno nuevo.
+            </div>
+          ) : null}
+
+          {estado === "RECIBIDO" && !pedidoEnviadoHoy && !pedidoEnProceso && puedeEditar ? (
+            <div className="mb-4 rounded-md border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-600/30 dark:bg-emerald-950/20 dark:text-emerald-100">
+              El último pedido fue recibido. Puedes enviar un pedido extra cuando lo necesites; las cantidades
+              se calculan según tu stock actual.
             </div>
           ) : null}
 
@@ -399,7 +430,7 @@ export function PedidoMensualPanel({
                 ) : null}
               </div>
 
-              <div className="space-y-4 lg:hidden">
+              <div className="space-y-4 md:hidden">
                 {CATEGORIAS_AGRUPACION_UI.map((cat) => {
                   const lineasCat = lineas.filter(
                     (l) => categoriaAgrupacionListado(l.categoria) === cat
@@ -438,7 +469,7 @@ export function PedidoMensualPanel({
                 })}
               </div>
 
-              <div className="hidden overflow-x-auto rounded-lg border border-border lg:block">
+              <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
                 <table className="w-full min-w-[52rem] border-collapse text-sm">
                   <thead>
                     <tr className="border-b bg-muted/80 text-left text-xs font-medium text-muted-foreground">
@@ -559,7 +590,7 @@ export function PedidoMensualPanel({
                 <div className="flex flex-wrap gap-3">
                   <Button
                     type="button"
-                    disabled={pending}
+                    disabled={pending || pedidoEnviadoHoy || pedidoEnProceso}
                     onClick={abrirConfirmacionEnvio}
                   >
                     {pending ? "Enviando…" : "Confirmar y enviar"}

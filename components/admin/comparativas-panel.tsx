@@ -715,39 +715,42 @@ export function ComparativasPanel({
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-border/60">
+      <div className="scrollbar-thin -mx-1 flex overflow-x-auto border-b border-border/60 px-1">
         <button
           onClick={() => setActiveTab("wow-mom")}
           className={cn(
-            "pb-3 text-sm font-semibold border-b-2 px-4 transition-all duration-150 -mb-[2px] shrink-0",
+            "shrink-0 pb-3 text-xs font-semibold border-b-2 px-3 transition-all duration-150 -mb-[2px] sm:px-4 sm:text-sm",
             activeTab === "wow-mom"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          Comparativa por Medicamento
+          <span className="sm:hidden">Por medicamento</span>
+          <span className="hidden sm:inline">Comparativa por Medicamento</span>
         </button>
         <button
           onClick={() => setActiveTab("compare-postas")}
           className={cn(
-            "pb-3 text-sm font-semibold border-b-2 px-4 transition-all duration-150 -mb-[2px] shrink-0",
+            "shrink-0 pb-3 text-xs font-semibold border-b-2 px-3 transition-all duration-150 -mb-[2px] sm:px-4 sm:text-sm",
             activeTab === "compare-postas"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          Comparar entre Postas
+          <span className="sm:hidden">Entre postas</span>
+          <span className="hidden sm:inline">Comparar entre Postas</span>
         </button>
         <button
           onClick={() => setActiveTab("history")}
           className={cn(
-            "pb-3 text-sm font-semibold border-b-2 px-4 transition-all duration-150 -mb-[2px] shrink-0",
+            "shrink-0 pb-3 text-xs font-semibold border-b-2 px-3 transition-all duration-150 -mb-[2px] sm:px-4 sm:text-sm",
             activeTab === "history"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          Historial de Ingresos / Descuentos (6 meses)
+          <span className="sm:hidden">Historial 6 meses</span>
+          <span className="hidden sm:inline">Historial de Ingresos / Descuentos (6 meses)</span>
         </button>
       </div>
 

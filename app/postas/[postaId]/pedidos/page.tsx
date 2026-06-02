@@ -173,15 +173,18 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
   );
   const hayContraReceta = medsContraReceta.length > 0;
 
+  const pedidoGeneralVista = pedidosMes.general;
+  const pedidoContraRecetaVista = pedidosMes.contraReceta;
+
   const pedidoGeneral = {
-    id: pedidosMes.general?.id ?? null,
-    estado: pedidosMes.general?.estado ?? null,
-    enviado_en: pedidosMes.general?.enviado_en ?? null,
+    id: pedidoGeneralVista.pedido?.id ?? null,
+    estado: pedidoGeneralVista.pedido?.estado ?? null,
+    enviado_en: pedidoGeneralVista.pedido?.enviado_en ?? null,
   };
   const pedidoContraReceta = {
-    id: pedidosMes.contraReceta?.id ?? null,
-    estado: pedidosMes.contraReceta?.estado ?? null,
-    enviado_en: pedidosMes.contraReceta?.enviado_en ?? null,
+    id: pedidoContraRecetaVista.pedido?.id ?? null,
+    estado: pedidoContraRecetaVista.pedido?.estado ?? null,
+    enviado_en: pedidoContraRecetaVista.pedido?.enviado_en ?? null,
   };
 
   function buildPedidoRowData(
@@ -314,12 +317,12 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
                   <span className="ml-1.5">· código {postaCodigoCabecera}</span>
                 ) : null}
                 <span className="mt-1 block">
-                  Pedido general y pedido contra receta son independientes (uno de cada tipo por mes en esta
-                  posta).
+                  Pedido general y pedido contra receta son independientes. Puedes enviar varios al mes, con
+                  un envío por día calendario de cada tipo.
                 </span>
               </>
             ) : (
-              "Pedido general y contra receta por separado, por posta y por mes."
+              "Pedido general y contra receta por separado; varios envíos al mes, uno por día de cada tipo."
             )}
             {volverBandejaAdmin ? (
               <span className="mt-2 block rounded-md border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-950 dark:text-sky-50">
@@ -367,6 +370,8 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
               pedidoId={pedidoContraRecetaDatos.pedidoId}
               estado={pedidoContraRecetaDatos.estadoPedido}
               enviadoEtiqueta={pedidoContraRecetaDatos.enviadoEtiqueta}
+              pedidoEnviadoHoy={pedidoContraRecetaVista.pedidoEnviadoHoy}
+              pedidoEnProceso={pedidoContraRecetaVista.pedidoEnProceso}
               puedeEditar={puedeRegistrar}
               lineas={lineasContraReceta}
             />
@@ -389,6 +394,8 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
             pedidoId={pedidoGeneralDatos.pedidoId}
             estado={pedidoGeneralDatos.estadoPedido}
             enviadoEtiqueta={pedidoGeneralDatos.enviadoEtiqueta}
+            pedidoEnviadoHoy={pedidoGeneralVista.pedidoEnviadoHoy}
+            pedidoEnProceso={pedidoGeneralVista.pedidoEnProceso}
             puedeEditar={puedeRegistrar}
             lineas={lineasGeneral}
           />

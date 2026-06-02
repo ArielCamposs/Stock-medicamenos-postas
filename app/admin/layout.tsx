@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
 
-import { DesamLogo } from "@/components/brand/desam-logo";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { AdminSubnav } from "@/components/admin/admin-subnav";
-import { Button } from "@/components/ui/button";
-import { signOutAction } from "@/app/actions/auth";
+import { DesamLogo } from "@/components/brand/desam-logo";
 import {
   esAdminGeneral,
   requirePerfilUsuario,
@@ -61,23 +60,18 @@ export default async function AdminLayout({
                   {etiquetaRol(profile.rol)}
                 </span>
               </div>
-              <form action={signOutAction}>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  size="sm"
-                  className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 dark:border-rose-950 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:text-rose-300 transition-colors"
-                >
-                  Cerrar sesión
-                </Button>
-              </form>
+              <SignOutButton
+                className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 dark:border-rose-950 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:text-rose-300 transition-colors"
+              />
             </div>
           </div>
           <AdminSubnav puedeCatalogo={puedeCatalogo} />
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">{children}</main>
+      <main className="mx-auto w-full min-w-0 max-w-7xl flex-1 overflow-x-clip px-4 py-6 sm:py-8">
+        {children}
+      </main>
     </div>
   );
 }

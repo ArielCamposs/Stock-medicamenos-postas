@@ -39,6 +39,7 @@ export type PedidoInsumosAdminRow = {
   enviadoEtiqueta: string | null;
   creadoEtiqueta: string | null;
   comentarioAdmin: string | null;
+  comentarioPosta: string | null;
   detalle: { insumoNombre: string; cantidad_pedido: number }[];
 };
 
@@ -53,7 +54,6 @@ const TRANSICIONES: Partial<Record<EstadoPedido, EstadoPedido[]>> = {
   ENVIADO: ["APROBADO", "OBSERVADO", "RECHAZADO"],
   OBSERVADO: ["APROBADO", "RECHAZADO"],
   APROBADO: ["DESPACHADO"],
-  DESPACHADO: ["RECIBIDO"],
 };
 
 const ETIQUETA_ESTADO: Record<EstadoPedido, string> = {
@@ -173,6 +173,13 @@ export function PedidosInsumosAdminPanel({ pedidos, puedeGestionar }: Props) {
                                 {total} unidades
                               </span>
                             </div>
+                            {p.estado === "DESPACHADO" ? (
+                              <p className="mt-2 text-xs text-violet-800 dark:text-violet-200">
+                                {p.comentarioPosta
+                                  ? "La posta indicó que no recibió el pedido. Revisa el comentario abajo."
+                                  : "Esperando que la posta confirme si recibió el pedido."}
+                              </p>
+                            ) : null}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <Button
@@ -210,6 +217,12 @@ export function PedidosInsumosAdminPanel({ pedidos, puedeGestionar }: Props) {
                             <div className="mb-3 rounded-md border border-amber-400/40 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-600/30 dark:bg-amber-950/20 dark:text-amber-100">
                               <span className="font-medium">Comentario admin: </span>
                               {p.comentarioAdmin}
+                            </div>
+                          ) : null}
+                          {p.comentarioPosta ? (
+                            <div className="mb-3 rounded-md border border-destructive/35 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                              <span className="font-medium">Posta — no recibió: </span>
+                              {p.comentarioPosta}
                             </div>
                           ) : null}
                           {p.detalle.length === 0 ? (

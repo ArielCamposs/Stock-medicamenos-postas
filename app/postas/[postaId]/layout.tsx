@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { signOutAction } from "@/app/actions/auth";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { DesamLogo } from "@/components/brand/desam-logo";
 import { DismissibleBanner } from "@/components/posta/dismissible-banner";
 import { PwaInstallHint } from "@/components/posta/pwa-install-hint";
 import { PostaSyncBadge } from "@/components/posta/posta-sync-badge";
 import { PostaPerfilOfflineSync } from "@/components/posta/posta-perfil-offline-sync";
-import { PostaSubnav } from "@/components/posta/posta-subnav";
-import { Button } from "@/components/ui/button";
+import { PostaBottomNav, PostaSubnav } from "@/components/posta/posta-subnav";
 import {
   esAdminGeneral,
   esSoloSupervisionPosta,
@@ -128,16 +127,11 @@ export default async function PostaLayout({ children, params }: Props) {
                   {rolEtiqueta}
                 </span>
               </div>
-              <form action={signOutAction}>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  size="sm"
-                  className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 dark:border-rose-950 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:text-rose-300 transition-colors"
-                >
-                  Salir
-                </Button>
-              </form>
+              <SignOutButton
+                label="Salir"
+                confirmLabel="Salir"
+                className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 dark:border-rose-950 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:text-rose-300 transition-colors"
+              />
             </div>
           </div>
           <PostaSubnav postaId={postaId} />
@@ -163,7 +157,11 @@ export default async function PostaLayout({ children, params }: Props) {
         </DismissibleBanner>
       ) : null}
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">{children}</main>
+      <main className="mx-auto w-full min-w-0 max-w-7xl flex-1 overflow-x-clip px-4 py-6 pb-posta-nav sm:py-8">
+        {children}
+      </main>
+
+      <PostaBottomNav postaId={postaId} />
     </div>
   );
 }

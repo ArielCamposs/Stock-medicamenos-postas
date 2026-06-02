@@ -194,8 +194,8 @@ export default async function AdminPedidosPage() {
           ) : (
             <>
               <p className="mb-3 text-xs text-muted-foreground">
-                Clic en la fila del pedido: se abre el detalle y podés exportar esa fila a Excel. Los botones de la
-                derecha no disparan el modal.
+                Usa <span className="font-medium text-foreground">Ver</span> para abrir el detalle del pedido en un
+                modal con búsqueda por medicamento. PDF y acciones de bandeja están en cada fila.
               </p>
               <AdminPedidosHistorialInteractivo
                 filas={filasParaTablaInteractiva(lista)}

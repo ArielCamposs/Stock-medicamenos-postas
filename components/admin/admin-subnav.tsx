@@ -26,7 +26,7 @@ export function AdminSubnav({ puedeCatalogo }: { puedeCatalogo: boolean }) {
 
   return (
     <nav
-      className="-mx-1 flex gap-1 overflow-x-auto pb-0.5 pt-1 scrollbar-thin"
+      className="scroll-subnav scrollbar-thin -mx-1 flex gap-1 overflow-x-auto pb-0.5 pt-1"
       aria-label="Secciones de administración"
     >
       {links.map(({ href, label, exact }) => {
@@ -38,7 +38,7 @@ export function AdminSubnav({ puedeCatalogo }: { puedeCatalogo: boolean }) {
             key={href}
             href={href}
             className={cn(
-              "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+              "shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
               active
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"

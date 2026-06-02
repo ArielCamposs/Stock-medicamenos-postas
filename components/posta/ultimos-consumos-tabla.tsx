@@ -37,6 +37,58 @@ function diaDelMes(iso: string) {
   return Number.isFinite(d) ? d : 1;
 }
 
+function ConsumoRowContent({
+  r,
+  puedeRegistrar,
+  onEdit,
+}: {
+  r: UltimoConsumoRow;
+  puedeRegistrar: boolean;
+  onEdit: (row: UltimoConsumoRow) => void;
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium leading-snug">{r.medNombre}</p>
+          {r.medCodigo ? (
+            <p className="text-xs text-muted-foreground">{r.medCodigo}</p>
+          ) : null}
+          <p className="mt-1 text-xs text-muted-foreground">{formatFechaEs(r.fecha)}</p>
+        </div>
+        {puedeRegistrar ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0"
+            onClick={() => onEdit(r)}
+          >
+            Editar
+          </Button>
+        ) : null}
+      </div>
+      <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-md bg-muted/40 px-2 py-1.5 text-center">
+          <dt className="text-muted-foreground">Con AVIS</dt>
+          <dd className="font-semibold tabular-nums">{r.conAvis}</dd>
+        </div>
+        <div className="rounded-md bg-muted/40 px-2 py-1.5 text-center">
+          <dt className="text-muted-foreground">Sin AVIS</dt>
+          <dd className="font-semibold tabular-nums">{r.sinAvis}</dd>
+        </div>
+        <div className="rounded-md bg-primary/5 px-2 py-1.5 text-center">
+          <dt className="text-muted-foreground">Total</dt>
+          <dd className="font-bold tabular-nums">{r.total}</dd>
+        </div>
+      </dl>
+      {r.observacion ? (
+        <p className="mt-2 text-xs text-muted-foreground line-clamp-3">{r.observacion}</p>
+      ) : null}
+    </>
+  );
+}
+
 export function UltimosConsumosTabla({
   postaId,
   puedeRegistrar,
@@ -58,7 +110,8 @@ export function UltimosConsumosTabla({
 
   return (
     <>
-      <div className="overflow-x-auto">
+      {/* Escritorio */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full min-w-[46rem] border-collapse text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-muted-foreground">
@@ -115,6 +168,15 @@ export function UltimosConsumosTabla({
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Móvil */}
+      <div className="divide-y divide-border/60 rounded-lg border md:hidden">
+        {rows.map((r) => (
+          <div key={r.id} className="p-4">
+            <ConsumoRowContent r={r} puedeRegistrar={puedeRegistrar} onEdit={setEdit} />
+          </div>
+        ))}
       </div>
 
       {edit ? (

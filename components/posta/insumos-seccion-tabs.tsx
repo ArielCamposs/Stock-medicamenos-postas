@@ -55,7 +55,7 @@ export function InsumosSeccionTabs({
               ) : id === "pedido" && pedidoPendienteAtencion ? (
                 <span
                   className="size-2 shrink-0 rounded-full bg-amber-500 ring-2 ring-amber-500/30"
-                  aria-label="Pedido con observación"
+                  aria-label="Pedido requiere tu atención"
                 />
               ) : null;
             return (

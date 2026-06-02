@@ -3,9 +3,11 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import {
+  confirmarRecepcionPedidoInsumosPostaAction,
   enviarPedidoInsumosAction,
   type PedidoInsumosActionState,
 } from "@/app/actions/pedido-insumos";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -47,7 +49,9 @@ type Props = {
   estado: EstadoPedido;
   enviadoEtiqueta: string | null;
   comentarioAdmin: string | null;
+  comentarioPosta: string | null;
   puedeEditar: boolean;
+  puedeConfirmarRecepcion: boolean;
   /** Ya se envió otro pedido hoy; no se puede enviar uno nuevo hasta mañana. */
   pedidoEnviadoHoy: boolean;
   lineas: PedidoInsumosLineaCliente[];
@@ -110,19 +114,28 @@ export function PedidoInsumosPanel({
   estado,
   enviadoEtiqueta,
   comentarioAdmin,
+  comentarioPosta,
   puedeEditar,
+  puedeConfirmarRecepcion,
   pedidoEnviadoHoy,
   lineas,
 }: Props) {
   const { toast } = useToast();
 
   const enviarAction = enviarPedidoInsumosAction.bind(null, postaId);
+  const recepcionAction = confirmarRecepcionPedidoInsumosPostaAction.bind(null, postaId);
 
   const [stateEnviar, dispatchEnviar, pendingEnviar] = useActionState(enviarAction, INICIAL);
+  const [stateRecepcion, dispatchRecepcion, pendingRecepcion] = useActionState(
+    recepcionAction,
+    INICIAL
+  );
 
   const formRef = useRef<HTMLFormElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmChecked, setConfirmChecked] = useState(false);
+  const [recepcionDialog, setRecepcionDialog] = useState<"si" | "no" | null>(null);
+  const [comentarioNoRecibido, setComentarioNoRecibido] = useState("");
 
   const [valores, setValores] = useState<Map<string, ValoresLinea>>(() => {
     const m = new Map<string, ValoresLinea>();
@@ -149,6 +162,16 @@ export function PedidoInsumosPanel({
       toast(stateEnviar.error, "error");
     }
   }, [stateEnviar, toast]);
+
+  useEffect(() => {
+    if (stateRecepcion.ok && stateRecepcion.success) {
+      toast(stateRecepcion.success, "success");
+      setRecepcionDialog(null);
+      setComentarioNoRecibido("");
+    } else if (stateRecepcion.error) {
+      toast(stateRecepcion.error, "error");
+    }
+  }, [stateRecepcion, toast]);
 
   useEffect(() => {
     if (!confirmOpen) setConfirmChecked(false);
@@ -219,10 +242,25 @@ export function PedidoInsumosPanel({
   }
 
   const esEditable =
-    puedeEditar && (estado === "OBSERVADO" || estado === null || estado === "RECHAZADO" || estado === "RECIBIDO");
-  const enviado = estado === "ENVIADO" || estado === "APROBADO" || estado === "DESPACHADO";
+    puedeEditar &&
+    !pedidoEnviadoHoy &&
+    (estado === "OBSERVADO" || estado === null || estado === "RECHAZADO" || estado === "RECIBIDO");
+  const puedeMostrarEnvio = puedeEditar && (esEditable || pedidoEnviadoHoy);
+  const enviado = estado === "ENVIADO" || estado === "APROBADO";
+  const despachado = estado === "DESPACHADO";
   const rechazado = estado === "RECHAZADO";
   const recibido = estado === "RECIBIDO";
+
+  function confirmarRecepcion(recibidoSi: boolean) {
+    if (!pedidoIdProp) return;
+    const fd = new FormData();
+    fd.set("pedido_id", pedidoIdProp);
+    fd.set("recibido", recibidoSi ? "si" : "no");
+    if (!recibidoSi && comentarioNoRecibido.trim()) {
+      fd.set("comentario_posta", comentarioNoRecibido.trim());
+    }
+    dispatchRecepcion(fd);
+  }
 
   const etiquetaEstado: Record<Exclude<EstadoPedido, null>, string> = {
     BORRADOR: "Pendiente",
@@ -276,6 +314,59 @@ export function PedidoInsumosPanel({
           </div>
         ) : null}
 
+        {despachado ? (
+          <div className="rounded-md border border-violet-500/40 bg-violet-50 px-4 py-3 text-sm text-violet-950 dark:border-violet-600/30 dark:bg-violet-950/25 dark:text-violet-100">
+            <p className="font-medium mb-1">Pedido despachado por administración</p>
+            <p className="text-violet-900/90 dark:text-violet-100/90">
+              Indica si te llegó el pedido. Solo tú puedes confirmar la recepción; administración verá
+              el estado automáticamente.
+            </p>
+            {comentarioPosta ? (
+              <p className="mt-2 text-xs border-t border-violet-400/30 pt-2">
+                Registraste que <strong>no llegó</strong>
+                {comentarioPosta ? `: ${comentarioPosta}` : "."} Cuando lo recibas, confirma con
+                &quot;Sí, lo recibí&quot;.
+              </p>
+            ) : null}
+            {puedeConfirmarRecepcion ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={pendingRecepcion}
+                  onClick={() => setRecepcionDialog("si")}
+                >
+                  Sí, lo recibí
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={pendingRecepcion}
+                  onClick={() => {
+                    setComentarioNoRecibido("");
+                    setRecepcionDialog("no");
+                  }}
+                >
+                  No me llegó
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Solo el encargado de la posta puede confirmar la recepción.
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        {enviado ? (
+          <div className="rounded-md border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            {estado === "ENVIADO"
+              ? "Tu pedido fue enviado y está en revisión por administración."
+              : "Tu pedido fue aprobado. Administración lo marcará como despachado cuando lo envíe."}
+          </div>
+        ) : null}
+
         {recibido ? (
           <div className="rounded-md border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-600/30 dark:bg-emerald-950/20 dark:text-emerald-100">
             El último pedido fue recibido. Puedes enviar un nuevo pedido cuando lo necesites; las cantidades
@@ -283,9 +374,13 @@ export function PedidoInsumosPanel({
           </div>
         ) : null}
 
-        {pedidoEnviadoHoy && esEditable ? (
+        {pedidoEnviadoHoy && puedeEditar ? (
           <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:border-amber-600/30 dark:bg-amber-950/20 dark:text-amber-100">
-            Ya enviaste un pedido de insumos hoy. Puedes armar otro <strong>mañana</strong> (un envío por día).
+            <p className="font-medium">No puedes enviar otro pedido hoy</p>
+            <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
+              Ya enviaste un pedido de insumos hoy (un envío por día calendario). Podrás enviar otro{" "}
+              <strong>mañana</strong>.
+            </p>
           </div>
         ) : null}
 
@@ -458,14 +553,25 @@ export function PedidoInsumosPanel({
         </Card>
 
         {/* Acciones */}
-        {esEditable ? (
-          <div className="flex flex-wrap items-center gap-3 justify-end pt-2">
+        {puedeMostrarEnvio ? (
+          <div className="flex flex-col items-end gap-2 pt-2">
+            {pedidoEnviadoHoy ? (
+              <p className="text-xs text-muted-foreground text-right max-w-md">
+                El envío está bloqueado hasta mañana porque ya registraste un pedido hoy.
+              </p>
+            ) : null}
             <Button
               type="button"
-              disabled={pendingEnviar || pedidoEnviadoHoy}
+              disabled={pendingEnviar || pedidoEnviadoHoy || !esEditable}
+              variant={pedidoEnviadoHoy ? "secondary" : "default"}
               onClick={abrirConfirmacionEnvio}
+              title={
+                pedidoEnviadoHoy
+                  ? "Ya enviaste un pedido de insumos hoy. Puedes enviar otro mañana."
+                  : undefined
+              }
             >
-              Enviar pedido…
+              {pedidoEnviadoHoy ? "No puedes enviar hoy" : "Enviar pedido…"}
             </Button>
           </div>
         ) : null}
@@ -574,6 +680,80 @@ export function PedidoInsumosPanel({
             </Button>
             <Button disabled={pendingEnviar || !confirmChecked} onClick={confirmarYEnviar}>
               {pendingEnviar ? "Enviando…" : "Confirmar y enviar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={recepcionDialog === "si"}
+        onOpenChange={(open) => {
+          if (!open) setRecepcionDialog(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar recepción</DialogTitle>
+            <DialogDescription>
+              ¿Confirmas que recibiste el pedido de insumos despachado por administración? Las
+              cantidades que pediste se sumarán automáticamente a tu stock actual.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              disabled={pendingRecepcion}
+              onClick={() => setRecepcionDialog(null)}
+            >
+              Cancelar
+            </Button>
+            <Button disabled={pendingRecepcion} onClick={() => confirmarRecepcion(true)}>
+              {pendingRecepcion ? "Guardando…" : "Sí, confirmar recepción"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={recepcionDialog === "no"}
+        onOpenChange={(open) => {
+          if (!open) setRecepcionDialog(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Indicar que no llegó</DialogTitle>
+            <DialogDescription>
+              Administración verá que el pedido no llegó a la posta. Puedes agregar un comentario
+              opcional.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="comentario-no-recibido">Comentario (opcional)</Label>
+            <textarea
+              id="comentario-no-recibido"
+              value={comentarioNoRecibido}
+              onChange={(e) => setComentarioNoRecibido(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="Ej.: no apareció en la entrega del día…"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50 resize-none"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              disabled={pendingRecepcion}
+              onClick={() => setRecepcionDialog(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pendingRecepcion}
+              onClick={() => confirmarRecepcion(false)}
+            >
+              {pendingRecepcion ? "Guardando…" : "Registrar que no llegó"}
             </Button>
           </DialogFooter>
         </DialogContent>

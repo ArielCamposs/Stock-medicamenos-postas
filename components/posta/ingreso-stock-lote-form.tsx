@@ -173,7 +173,7 @@ export function IngresoStockLoteForm({
       ref={formRef}
       action={formAction}
       onChange={handleFormChange}
-      className={cn("flex flex-col gap-4", totalModificados > 0 && "pb-24")}
+      className={cn("flex flex-col gap-4", totalModificados > 0 && "pb-32 md:pb-24")}
     >
       <input type="hidden" name="medicamento_ids_json" value={idsJson} />
       <input type="hidden" name="fecha" value={fechaApunte} />
@@ -310,122 +310,218 @@ export function IngresoStockLoteForm({
           </p>
         </div>
       ) : (
-        <div className="relative max-h-[min(60vh,640px)] overflow-auto rounded-lg border border-border shadow-sm">
-          <table className="w-full min-w-[42rem] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/90 text-left text-xs font-medium text-muted-foreground">
-                <th className="sticky top-0 z-10 bg-muted/95 px-2 py-2 backdrop-blur">Medicamento</th>
-                <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur">
-                  Stock ref.
-                </th>
-                <th className="sticky top-0 z-10 w-[3.5rem] bg-muted/95 px-1 py-2 text-right backdrop-blur">
-                  Crít.
-                </th>
-                <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur">
-                  Disponible
-                </th>
-                {hayPedidoMes ? (
-                  <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur text-sky-700 dark:text-sky-400">
-                    Pedido
+        <>
+          {/* Escritorio */}
+          <div className="relative hidden max-h-[min(60vh,640px)] overflow-auto rounded-lg border border-border shadow-sm md:block">
+            <table className="w-full min-w-[42rem] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/90 text-left text-xs font-medium text-muted-foreground">
+                  <th className="sticky top-0 z-10 bg-muted/95 px-2 py-2 backdrop-blur">Medicamento</th>
+                  <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur">
+                    Stock ref.
                   </th>
-                ) : null}
-                {totalIngresadoMes > 0 ? (
-                  <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur text-amber-700 dark:text-amber-400">
-                    Ingresado
+                  <th className="sticky top-0 z-10 w-[3.5rem] bg-muted/95 px-1 py-2 text-right backdrop-blur">
+                    Crít.
                   </th>
-                ) : null}
-                <th className="sticky top-0 z-10 w-[7rem] bg-muted/95 px-2 py-2 text-center backdrop-blur">
-                  Recibido
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map((m) => {
-                const L = ledgerPorMedicamento[m.id];
-                const bajoCritico =
-                  L !== undefined &&
-                  L.stock_critico > 0 &&
-                  L.disponible <= L.stock_critico;
-                const editado = editados.has(m.id);
-                const pendientePedido =
-                  hayPedidoMes && m.cantidadPedida > 0 && !editado;
+                  <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur">
+                    Disponible
+                  </th>
+                  {hayPedidoMes ? (
+                    <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur text-sky-700 dark:text-sky-400">
+                      Pedido
+                    </th>
+                  ) : null}
+                  {totalIngresadoMes > 0 ? (
+                    <th className="sticky top-0 z-10 w-[4.5rem] bg-muted/95 px-1 py-2 text-right whitespace-nowrap backdrop-blur text-amber-700 dark:text-amber-400">
+                      Ingresado
+                    </th>
+                  ) : null}
+                  <th className="sticky top-0 z-10 w-[7rem] bg-muted/95 px-2 py-2 text-center backdrop-blur">
+                    Recibido
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.map((m) => {
+                  const L = ledgerPorMedicamento[m.id];
+                  const bajoCritico =
+                    L !== undefined &&
+                    L.stock_critico > 0 &&
+                    L.disponible <= L.stock_critico;
+                  const editado = editados.has(m.id);
+                  const pendientePedido =
+                    hayPedidoMes && m.cantidadPedida > 0 && !editado;
 
-                return (
-                  <tr
-                    key={m.id}
-                    className={cn(
-                      "border-b border-border/70 transition-colors",
-                      editado
-                        ? "border-l-2 border-l-emerald-500 bg-emerald-500/8 dark:bg-emerald-500/10"
-                        : pendientePedido
-                          ? "border-l-2 border-l-sky-400/60 bg-sky-500/5"
-                          : bajoCritico
-                            ? "bg-amber-500/10 dark:bg-amber-500/15"
-                            : "odd:bg-muted/20"
-                    )}
-                  >
-                    <td className="px-2 py-1.5 align-middle">
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <span className="font-medium leading-snug">{m.nombre}</span>
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          {m.codigo_interno} · {m.unidad_medida}
-                          {m.codigo_avis ? (
-                            <span className="ml-1">· AVIS {m.codigo_avis}</span>
-                          ) : null}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-1 py-1.5 text-right tabular-nums">
-                      {L?.stock_recomendado ?? "—"}
-                    </td>
-                    <td className="px-1 py-1.5 text-right tabular-nums">
-                      {L?.stock_critico ?? "—"}
-                    </td>
-                    <td
+                  return (
+                    <tr
+                      key={m.id}
                       className={cn(
-                        "px-1 py-1.5 text-right font-medium tabular-nums",
-                        bajoCritico && "text-amber-900 dark:text-amber-100"
+                        "border-b border-border/70 transition-colors",
+                        editado
+                          ? "border-l-2 border-l-emerald-500 bg-emerald-500/8 dark:bg-emerald-500/10"
+                          : pendientePedido
+                            ? "border-l-2 border-l-sky-400/60 bg-sky-500/5"
+                            : bajoCritico
+                              ? "bg-amber-500/10 dark:bg-amber-500/15"
+                              : "odd:bg-muted/20"
                       )}
                     >
-                      {L?.disponible ?? "—"}
-                    </td>
-                    {hayPedidoMes ? (
-                      <td className="px-1 py-1.5 text-right tabular-nums text-sky-700 dark:text-sky-400 font-medium">
-                        {m.cantidadPedida > 0 ? m.cantidadPedida : (
-                          <span className="text-muted-foreground/40 font-normal">—</span>
-                        )}
+                      <td className="px-2 py-1.5 align-middle">
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <span className="font-medium leading-snug">{m.nombre}</span>
+                          <span className="font-mono text-[11px] text-muted-foreground">
+                            {m.codigo_interno} · {m.unidad_medida}
+                            {m.codigo_avis ? (
+                              <span className="ml-1">· AVIS {m.codigo_avis}</span>
+                            ) : null}
+                          </span>
+                        </div>
                       </td>
+                      <td className="px-1 py-1.5 text-right tabular-nums">
+                        {L?.stock_recomendado ?? "—"}
+                      </td>
+                      <td className="px-1 py-1.5 text-right tabular-nums">
+                        {L?.stock_critico ?? "—"}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-1 py-1.5 text-right font-medium tabular-nums",
+                          bajoCritico && "text-amber-900 dark:text-amber-100"
+                        )}
+                      >
+                        {L?.disponible ?? "—"}
+                      </td>
+                      {hayPedidoMes ? (
+                        <td className="px-1 py-1.5 text-right tabular-nums text-sky-700 dark:text-sky-400 font-medium">
+                          {m.cantidadPedida > 0 ? m.cantidadPedida : (
+                            <span className="text-muted-foreground/40 font-normal">—</span>
+                          )}
+                        </td>
+                      ) : null}
+                      {totalIngresadoMes > 0 ? (
+                        <td className="px-1 py-1.5 text-right tabular-nums font-medium text-amber-700 dark:text-amber-400">
+                          {m.cantidadYaIngresada > 0 ? m.cantidadYaIngresada : (
+                            <span className="text-muted-foreground/30 font-normal">—</span>
+                          )}
+                        </td>
+                      ) : null}
+                      <td className="p-1 align-middle">
+                        <input
+                          type="number"
+                          name={`cant_${m.id}`}
+                          min={0}
+                          step={1}
+                          placeholder="—"
+                          defaultValue={m.cantidadSugerida > 0 ? m.cantidadSugerida : undefined}
+                          className={cn(
+                            cantInputClass,
+                            editado && "border-emerald-500/60 bg-emerald-500/5 font-semibold"
+                          )}
+                          aria-label={`Cantidad recibida de ${m.nombre}`}
+                          onFocus={(e) => e.target.select()}
+                          onKeyDown={handleKeyDownCant}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Móvil */}
+          <div className="max-h-[min(60vh,640px)] divide-y divide-border/60 overflow-auto rounded-lg border border-border shadow-sm md:hidden">
+            {filtrados.map((m) => {
+              const L = ledgerPorMedicamento[m.id];
+              const bajoCritico =
+                L !== undefined &&
+                L.stock_critico > 0 &&
+                L.disponible <= L.stock_critico;
+              const editado = editados.has(m.id);
+              const pendientePedido = hayPedidoMes && m.cantidadPedida > 0 && !editado;
+
+              return (
+                <div
+                  key={m.id}
+                  className={cn(
+                    "p-3",
+                    editado
+                      ? "border-l-4 border-l-emerald-500 bg-emerald-500/8"
+                      : pendientePedido
+                        ? "border-l-4 border-l-sky-400/60 bg-sky-500/5"
+                        : bajoCritico
+                          ? "border-l-4 border-l-amber-500 bg-amber-500/10"
+                          : ""
+                  )}
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium leading-snug">{m.nombre}</p>
+                    <p className="font-mono text-[11px] text-muted-foreground">
+                      {m.codigo_interno} · {m.unidad_medida}
+                      {m.codigo_avis ? <span> · AVIS {m.codigo_avis}</span> : null}
+                    </p>
+                  </div>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-4">
+                    <div>
+                      <dt className="text-muted-foreground">Stock ref.</dt>
+                      <dd className="font-medium tabular-nums">{L?.stock_recomendado ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Crít.</dt>
+                      <dd className="font-medium tabular-nums">{L?.stock_critico ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Disponible</dt>
+                      <dd
+                        className={cn(
+                          "font-medium tabular-nums",
+                          bajoCritico && "text-amber-900 dark:text-amber-100"
+                        )}
+                      >
+                        {L?.disponible ?? "—"}
+                      </dd>
+                    </div>
+                    {hayPedidoMes ? (
+                      <div>
+                        <dt className="text-muted-foreground">Pedido</dt>
+                        <dd className="font-medium tabular-nums text-sky-700 dark:text-sky-400">
+                          {m.cantidadPedida > 0 ? m.cantidadPedida : "—"}
+                        </dd>
+                      </div>
                     ) : null}
                     {totalIngresadoMes > 0 ? (
-                      <td className="px-1 py-1.5 text-right tabular-nums font-medium text-amber-700 dark:text-amber-400">
-                        {m.cantidadYaIngresada > 0 ? m.cantidadYaIngresada : (
-                          <span className="text-muted-foreground/30 font-normal">—</span>
-                        )}
-                      </td>
+                      <div>
+                        <dt className="text-muted-foreground">Ingresado</dt>
+                        <dd className="font-medium tabular-nums text-amber-700 dark:text-amber-400">
+                          {m.cantidadYaIngresada > 0 ? m.cantidadYaIngresada : "—"}
+                        </dd>
+                      </div>
                     ) : null}
-                    <td className="p-1 align-middle">
-                      <input
-                        type="number"
-                        name={`cant_${m.id}`}
-                        min={0}
-                        step={1}
-                        placeholder="—"
-                        defaultValue={m.cantidadSugerida > 0 ? m.cantidadSugerida : undefined}
-                        className={cn(
-                          cantInputClass,
-                          editado && "border-emerald-500/60 bg-emerald-500/5 font-semibold"
-                        )}
-                        aria-label={`Cantidad recibida de ${m.nombre}`}
-                        onFocus={(e) => e.target.select()}
-                        onKeyDown={handleKeyDownCant}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                  </dl>
+                  <div className="mt-3">
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">Recibido</Label>
+                    <input
+                      type="number"
+                      name={`cant_${m.id}`}
+                      min={0}
+                      step={1}
+                      placeholder="—"
+                      defaultValue={m.cantidadSugerida > 0 ? m.cantidadSugerida : undefined}
+                      className={cn(
+                        cantInputClass,
+                        "max-w-[8rem]",
+                        editado && "border-emerald-500/60 bg-emerald-500/5 font-semibold"
+                      )}
+                      aria-label={`Cantidad recibida de ${m.nombre}`}
+                      onFocus={(e) => e.target.select()}
+                      onKeyDown={handleKeyDownCant}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {totalModificados === 0 && (
@@ -435,7 +531,7 @@ export function IngresoStockLoteForm({
       )}
 
       {totalModificados > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-md py-3 px-5 shadow-xl animate-in slide-in-from-bottom duration-200">
+        <div className="fixed-above-posta-nav fixed left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-md py-3 px-5 shadow-xl animate-in slide-in-from-bottom duration-200 md:bottom-0">
           <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span className="flex items-center gap-1.5">

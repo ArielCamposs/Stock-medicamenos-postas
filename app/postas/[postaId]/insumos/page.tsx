@@ -60,7 +60,7 @@ export default async function PostaInsumosPage({ params, searchParams }: PagePro
       supabase.from("postas").select("nombre, codigo").eq("id", postaId).maybeSingle(),
       supabase
         .from("pedidos_insumos")
-        .select("id, estado, enviado_en, comentario_admin")
+        .select("id, estado, enviado_en, comentario_admin, comentario_posta")
         .eq("posta_id", postaId)
         .in("estado", ["OBSERVADO", "ENVIADO", "APROBADO", "DESPACHADO", "RECIBIDO", "RECHAZADO"])
         .order("created_at", { ascending: false })
@@ -169,7 +169,9 @@ export default async function PostaInsumosPage({ params, searchParams }: PagePro
       : null;
 
   const pedidoPendienteAtencion =
-    estadoPedido === "OBSERVADO" || estadoPedido === "RECHAZADO";
+    estadoPedido === "OBSERVADO" ||
+    estadoPedido === "RECHAZADO" ||
+    estadoPedido === "DESPACHADO";
 
   const enviadoEnIso =
     pedidoRow &&
@@ -187,6 +189,17 @@ export default async function PostaInsumosPage({ params, searchParams }: PagePro
     typeof (pedidoRow as { comentario_admin: unknown }).comentario_admin === "string"
       ? String((pedidoRow as { comentario_admin: string }).comentario_admin)
       : null;
+
+  const comentarioPosta =
+    pedidoRow &&
+    typeof pedidoRow === "object" &&
+    "comentario_posta" in pedidoRow &&
+    typeof (pedidoRow as { comentario_posta: unknown }).comentario_posta === "string"
+      ? String((pedidoRow as { comentario_posta: string }).comentario_posta)
+      : null;
+
+  const puedeConfirmarRecepcion =
+    puedeEditarPedido && estadoPedido === "DESPACHADO" && pedidoId !== null;
 
   const { data: detalleRows } = pedidoId
     ? await supabase
@@ -262,8 +275,9 @@ export default async function PostaInsumosPage({ params, searchParams }: PagePro
     };
   });
 
-  const pedidoEnviadoHoy =
-    puedeEnviarPedido && (await postaEnvioPedidoInsumosHoy(supabase, postaId, pedidoId));
+  const pedidoEnviadoHoy = puedeEditarPedido
+    ? await postaEnvioPedidoInsumosHoy(supabase, postaId, pedidoId)
+    : false;
 
   return (
     <div className="space-y-6">
@@ -311,7 +325,9 @@ export default async function PostaInsumosPage({ params, searchParams }: PagePro
             estado={estadoPedido}
             enviadoEtiqueta={enviadoEtiqueta}
             comentarioAdmin={comentarioAdmin}
+            comentarioPosta={comentarioPosta}
             puedeEditar={puedeEnviarPedido}
+            puedeConfirmarRecepcion={puedeConfirmarRecepcion}
             pedidoEnviadoHoy={pedidoEnviadoHoy}
             lineas={lineasPedido}
           />

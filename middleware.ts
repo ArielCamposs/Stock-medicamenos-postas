@@ -33,7 +33,7 @@ export async function middleware(request: NextRequest) {
   const { response, user } = await updateSession(request);
   const pathname = request.nextUrl.pathname;
 
-  if (pathname === "/api/connectivity") {
+  if (pathname === "/api/connectivity" || pathname === "/api/auth/session") {
     return response;
   }
 

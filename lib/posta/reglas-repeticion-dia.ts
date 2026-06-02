@@ -127,3 +127,75 @@ export async function postaEnvioPedidoInsumosHoy(
   }
   return false;
 }
+
+type TipoPedidoMensual = "GENERAL" | "CONTRA_RECETA";
+
+/**
+ * No enviar un pedido mensual (general o contra receta) el mismo día que otro del mismo tipo.
+ * Reenviar un pedido OBSERVADO (mismo id) sí se permite.
+ */
+export async function validarPedidoMensualNoMismoDia(
+  supabase: SupabaseSrv,
+  postaId: string,
+  tipo: TipoPedidoMensual,
+  pedidoIdActual: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const hoy = fechaCalendarioEnZonaIANA(ZONA_CALENDARIO_OPERACION);
+  const etiqueta = tipo === "CONTRA_RECETA" ? "contra receta" : "general";
+
+  const { data } = await supabase
+    .from("pedidos_mensuales")
+    .select("id, enviado_en")
+    .eq("posta_id", postaId)
+    .eq("tipo", tipo)
+    .not("enviado_en", "is", null)
+    .order("enviado_en", { ascending: false })
+    .limit(40);
+
+  if (!data || !Array.isArray(data)) return { ok: true };
+
+  for (const row of data) {
+    const r = row as Record<string, unknown>;
+    if (typeof r.id !== "string" || r.id === pedidoIdActual) continue;
+    const enviado = r.enviado_en;
+    if (typeof enviado !== "string") continue;
+    if (fechaOperacionDesdeIso(enviado) === hoy) {
+      return {
+        ok: false,
+        error: `Ya enviaste el pedido ${etiqueta} hoy. Puedes enviar otro mañana si lo necesitas.`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/** True si la posta ya envió un pedido mensual de ese tipo hoy (Chile). */
+export async function postaEnvioPedidoMensualHoy(
+  supabase: SupabaseSrv,
+  postaId: string,
+  tipo: TipoPedidoMensual,
+  pedidoIdExcluir: string | null
+): Promise<boolean> {
+  const hoy = fechaCalendarioEnZonaIANA(ZONA_CALENDARIO_OPERACION);
+
+  const { data } = await supabase
+    .from("pedidos_mensuales")
+    .select("id, enviado_en")
+    .eq("posta_id", postaId)
+    .eq("tipo", tipo)
+    .not("enviado_en", "is", null)
+    .order("enviado_en", { ascending: false })
+    .limit(40);
+
+  if (!data || !Array.isArray(data)) return false;
+
+  for (const row of data) {
+    const r = row as Record<string, unknown>;
+    if (typeof r.id !== "string") continue;
+    if (pedidoIdExcluir && r.id === pedidoIdExcluir) continue;
+    const enviado = r.enviado_en;
+    if (typeof enviado !== "string") continue;
+    if (fechaOperacionDesdeIso(enviado) === hoy) return true;
+  }
+  return false;
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { SessionKeeper } from "@/components/providers/session-keeper";
 import { ToastProvider } from "@/components/providers/toast-provider";
 import { AppSerwistProvider } from "@/components/serwist-provider";
 import "./globals.css";
@@ -39,6 +40,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <AppSerwistProvider>
+          <SessionKeeper />
           <ToastProvider>{children}</ToastProvider>
         </AppSerwistProvider>
       </body>

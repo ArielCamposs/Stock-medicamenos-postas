@@ -122,6 +122,73 @@ export async function guardarStockInsumosPostaAction(
   return { ok: true, success: "Stock de insumos guardado." };
 }
 
+type SupabaseSrv = Awaited<ReturnType<typeof createServerSupabaseClient>>;
+
+/**
+ * Al confirmar recepción: suma cantidad_pedido de cada línea al stock ya registrado en la posta.
+ */
+export async function sumarPedidoInsumosRecibidoAlStock(
+  supabase: SupabaseSrv,
+  postaId: string,
+  pedidoId: string
+): Promise<{ ok: true; cambios: { insumoId: string; anterior: number; nuevo: number }[] } | { ok: false; error: string }> {
+  const { data: detalle, error: detErr } = await supabase
+    .from("detalle_pedido_insumos")
+    .select("insumo_id, cantidad_pedido")
+    .eq("pedido_id", pedidoId);
+
+  if (detErr) return { ok: false, error: detErr.message };
+
+  const lineas: { insumoId: string; cantidadPedido: number }[] = [];
+  if (Array.isArray(detalle)) {
+    for (const row of detalle) {
+      const r = row as Record<string, unknown>;
+      if (typeof r.insumo_id !== "string") continue;
+      const n = Number(r.cantidad_pedido);
+      const cantidadPedido = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+      if (cantidadPedido > 0) {
+        lineas.push({ insumoId: r.insumo_id, cantidadPedido });
+      }
+    }
+  }
+
+  if (lineas.length === 0) return { ok: true, cambios: [] };
+
+  const insumoIds = lineas.map((l) => l.insumoId);
+  const { data: stockRows, error: stockErr } = await supabase
+    .from("stock_insumos_posta")
+    .select("insumo_id, cantidad")
+    .eq("posta_id", postaId)
+    .in("insumo_id", insumoIds);
+
+  if (stockErr) return { ok: false, error: stockErr.message };
+
+  const stockMap = new Map<string, number>();
+  if (Array.isArray(stockRows)) {
+    for (const row of stockRows) {
+      const r = row as Record<string, unknown>;
+      if (typeof r.insumo_id !== "string") continue;
+      const n = Number(r.cantidad);
+      stockMap.set(r.insumo_id, Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0);
+    }
+  }
+
+  const cambios: { insumoId: string; anterior: number; nuevo: number }[] = [];
+  const upsertRows = lineas.map((l) => {
+    const anterior = stockMap.get(l.insumoId) ?? 0;
+    const nuevo = anterior + l.cantidadPedido;
+    cambios.push({ insumoId: l.insumoId, anterior, nuevo });
+    return { posta_id: postaId, insumo_id: l.insumoId, cantidad: nuevo };
+  });
+
+  const { error: upErr } = await supabase.from("stock_insumos_posta").upsert(upsertRows, {
+    onConflict: "posta_id,insumo_id",
+  });
+  if (upErr) return { ok: false, error: upErr.message };
+
+  return { ok: true, cambios };
+}
+
 /** Sincroniza stock actual al enviar o corregir un pedido de insumos. */
 export async function sincronizarStockInsumosDesdePedido(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,

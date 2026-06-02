@@ -183,7 +183,7 @@ export function StockAvisMensualForm({
               <input type="hidden" name="medicamento_ids_json" value={idsJson} />
               <input type="hidden" name="ym" value={mesYm} />
 
-              <div className="relative max-h-[min(60vh,640px)] overflow-auto rounded-lg border border-border shadow-sm">
+              <div className="relative hidden max-h-[min(60vh,640px)] overflow-auto rounded-lg border border-border shadow-sm md:block">
                 <table className="w-full min-w-[36rem] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/90 text-left text-xs font-medium text-muted-foreground">
@@ -228,6 +228,37 @@ export function StockAvisMensualForm({
                 </table>
               </div>
 
+              <div className="max-h-[min(60vh,640px)] divide-y divide-border/60 overflow-auto rounded-lg border border-border shadow-sm md:hidden">
+                {medicamentos.map((m) => (
+                  <div
+                    key={m.id}
+                    className={cn("flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between", !medCoincide(m, query) && "hidden")}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium leading-snug text-foreground">{m.nombre}</div>
+                      <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                        {m.codigo_interno} · {m.unidad_medida}
+                        {m.codigo_avis ? <span> · AVIS {m.codigo_avis}</span> : null}
+                      </div>
+                    </div>
+                    <div className="w-full sm:w-28">
+                      <Label className="mb-1 block text-xs text-muted-foreground sm:sr-only">
+                        Stock AVIS
+                      </Label>
+                      <input
+                        name={`avis_${m.id}`}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        defaultValue={String(m.declarado_avis)}
+                        className={cantInputClass}
+                        aria-label={`Stock AVIS ${m.nombre}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={pending}>
                   {pending ? "Guardando…" : "Guardar declaración AVIS"}
@@ -235,7 +266,8 @@ export function StockAvisMensualForm({
               </div>
             </form>
           ) : (
-            <div className={cn("relative max-h-[min(60vh,640px)] overflow-auto rounded-lg border border-border shadow-sm", filtrados.length === 0 && "hidden")}>
+            <>
+            <div className={cn("relative hidden max-h-[min(60vh,640px)] overflow-auto rounded-lg border border-border shadow-sm md:block", filtrados.length === 0 && "hidden")}>
               <table className="w-full min-w-[36rem] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/90 text-left text-xs font-medium text-muted-foreground">
@@ -269,6 +301,24 @@ export function StockAvisMensualForm({
                 </tbody>
               </table>
             </div>
+            <div className={cn("max-h-[min(60vh,640px)] divide-y divide-border/60 overflow-auto rounded-lg border border-border shadow-sm md:hidden", filtrados.length === 0 && "hidden")}>
+              {medicamentos.map((m) => (
+                <div
+                  key={m.id}
+                  className={cn("flex items-center justify-between gap-3 p-3", !medCoincide(m, query) && "hidden")}
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium leading-snug text-foreground">{m.nombre}</div>
+                    <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                      {m.codigo_interno} · {m.unidad_medida}
+                      {m.codigo_avis ? <span> · AVIS {m.codigo_avis}</span> : null}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right tabular-nums font-medium">{m.declarado_avis}</div>
+                </div>
+              ))}
+            </div>
+            </>
           )}
         </>
       )}

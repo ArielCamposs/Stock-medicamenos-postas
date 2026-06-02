@@ -1,4 +1,5 @@
 import type { TipoPedido } from "@/app/actions/pedido-mensual";
+import { postaEnvioPedidoMensualHoy } from "@/lib/posta/reglas-repeticion-dia";
 import type { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type SupabaseSrv = Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -8,11 +9,19 @@ export type PedidoMensualCabecera = {
   estado: string;
   enviado_en: string | null;
   tipo: TipoPedido | null;
+  fecha_creacion: string | null;
+};
+
+export type PedidoMensualVistaTipo = {
+  /** Pedido a mostrar; null = formulario nuevo para otro envío del mes. */
+  pedido: PedidoMensualCabecera | null;
+  pedidoEnProceso: boolean;
+  pedidoEnviadoHoy: boolean;
 };
 
 export type PedidosMensualesMes = {
-  general: PedidoMensualCabecera | null;
-  contraReceta: PedidoMensualCabecera | null;
+  general: PedidoMensualVistaTipo;
+  contraReceta: PedidoMensualVistaTipo;
   error: string | null;
 };
 
@@ -26,12 +35,49 @@ function parseFila(row: Record<string, unknown>): PedidoMensualCabecera | null {
   const tipoRaw = row.tipo;
   const tipo: TipoPedido | null =
     tipoRaw === "CONTRA_RECETA" ? "CONTRA_RECETA" : tipoRaw === "GENERAL" ? "GENERAL" : null;
-  return { id: row.id, estado, enviado_en, tipo };
+  const fecha_creacion =
+    row.fecha_creacion === null || typeof row.fecha_creacion === "string"
+      ? (row.fecha_creacion as string | null)
+      : null;
+  return { id: row.id, estado, enviado_en, tipo, fecha_creacion };
+}
+
+const EN_PROCESO = new Set(["ENVIADO", "APROBADO", "DESPACHADO"]);
+
+function resolverVistaPedidoTipo(
+  filas: PedidoMensualCabecera[],
+  pedidoEnviadoHoy: boolean
+): Omit<PedidoMensualVistaTipo, "pedidoEnviadoHoy"> {
+  const byRecency = [...filas].sort((a, b) => {
+    const ta = a.fecha_creacion ?? a.enviado_en ?? "";
+    const tb = b.fecha_creacion ?? b.enviado_en ?? "";
+    return tb.localeCompare(ta);
+  });
+
+  for (const p of byRecency) {
+    if (p.estado === "OBSERVADO") {
+      return { pedido: p, pedidoEnProceso: false };
+    }
+  }
+  for (const p of byRecency) {
+    if (p.estado === "BORRADOR") {
+      return { pedido: p, pedidoEnProceso: false };
+    }
+  }
+  for (const p of byRecency) {
+    if (EN_PROCESO.has(p.estado)) {
+      return { pedido: p, pedidoEnProceso: true };
+    }
+  }
+  if (pedidoEnviadoHoy) {
+    return { pedido: byRecency[0] ?? null, pedidoEnProceso: false };
+  }
+  return { pedido: null, pedidoEnProceso: false };
 }
 
 /**
- * Carga todos los pedidos del mes y los separa por tipo en código.
- * Así el pedido general enviado nunca se asocia al tab contra receta.
+ * Carga pedidos del mes y resuelve cuál mostrar por tipo (general / contra receta).
+ * Permite varios pedidos por mes; el límite diario se aplica al enviar.
  */
 export async function cargarPedidosMensualesMes(
   supabase: SupabaseSrv,
@@ -41,48 +87,71 @@ export async function cargarPedidosMensualesMes(
 ): Promise<PedidosMensualesMes> {
   const { data, error } = await supabase
     .from("pedidos_mensuales")
-    .select("id, estado, enviado_en, tipo")
+    .select("id, estado, enviado_en, tipo, fecha_creacion")
     .eq("posta_id", postaId)
     .eq("anio", anio)
-    .eq("mes", mes);
+    .eq("mes", mes)
+    .order("fecha_creacion", { ascending: false });
 
   if (error) {
     const msg = error.message ?? "";
     if (/tipo/i.test(msg) && /column|schema/i.test(msg)) {
       const legacy = await supabase
         .from("pedidos_mensuales")
-        .select("id, estado, enviado_en")
+        .select("id, estado, enviado_en, fecha_creacion")
         .eq("posta_id", postaId)
         .eq("anio", anio)
-        .eq("mes", mes);
+        .eq("mes", mes)
+        .order("fecha_creacion", { ascending: false });
       if (legacy.error) {
-        return { general: null, contraReceta: null, error: legacy.error.message };
+        return {
+          general: { pedido: null, pedidoEnProceso: false, pedidoEnviadoHoy: false },
+          contraReceta: { pedido: null, pedidoEnProceso: false, pedidoEnviadoHoy: false },
+          error: legacy.error.message,
+        };
       }
       const filas = (legacy.data ?? [])
-        .map((r) => parseFila(r as Record<string, unknown>))
+        .map((r) => parseFila({ ...(r as Record<string, unknown>), tipo: "GENERAL" }))
         .filter((x): x is PedidoMensualCabecera => x !== null);
-      const unico = filas.length === 1 ? filas[0] : filas[0] ?? null;
+      const enviadoHoy = await postaEnvioPedidoMensualHoy(supabase, postaId, "GENERAL", null);
+      const vista = resolverVistaPedidoTipo(filas, enviadoHoy);
       return {
-        general: unico ? { ...unico, tipo: "GENERAL" } : null,
-        contraReceta: null,
+        general: { ...vista, pedidoEnviadoHoy: enviadoHoy },
+        contraReceta: { pedido: null, pedidoEnProceso: false, pedidoEnviadoHoy: false },
         error: null,
       };
     }
-    return { general: null, contraReceta: null, error: msg };
+    return {
+      general: { pedido: null, pedidoEnProceso: false, pedidoEnviadoHoy: false },
+      contraReceta: { pedido: null, pedidoEnProceso: false, pedidoEnviadoHoy: false },
+      error: msg,
+    };
   }
 
-  let general: PedidoMensualCabecera | null = null;
-  let contraReceta: PedidoMensualCabecera | null = null;
+  const generalFilas: PedidoMensualCabecera[] = [];
+  const contraFilas: PedidoMensualCabecera[] = [];
 
   for (const row of data ?? []) {
     const parsed = parseFila(row as Record<string, unknown>);
     if (!parsed) continue;
     if (parsed.tipo === "CONTRA_RECETA") {
-      contraReceta = parsed;
+      contraFilas.push(parsed);
     } else {
-      if (!general) general = { ...parsed, tipo: "GENERAL" };
+      generalFilas.push({ ...parsed, tipo: "GENERAL" });
     }
   }
 
-  return { general, contraReceta, error: null };
+  const [enviadoHoyGeneral, enviadoHoyContra] = await Promise.all([
+    postaEnvioPedidoMensualHoy(supabase, postaId, "GENERAL", null),
+    postaEnvioPedidoMensualHoy(supabase, postaId, "CONTRA_RECETA", null),
+  ]);
+
+  const generalVista = resolverVistaPedidoTipo(generalFilas, enviadoHoyGeneral);
+  const contraVista = resolverVistaPedidoTipo(contraFilas, enviadoHoyContra);
+
+  return {
+    general: { ...generalVista, pedidoEnviadoHoy: enviadoHoyGeneral },
+    contraReceta: { ...contraVista, pedidoEnviadoHoy: enviadoHoyContra },
+    error: null,
+  };
 }

@@ -49,7 +49,7 @@ export default async function AdminPedidosInsumosPage() {
   const { data: pedidosRaw, error } = await supabase
     .from("pedidos_insumos")
     .select(
-      `id, posta_id, estado, enviado_en, created_at, comentario_admin,
+      `id, posta_id, estado, enviado_en, created_at, comentario_admin, comentario_posta,
       postas ( nombre, codigo )`
     )
     .neq("estado", "BORRADOR")
@@ -128,6 +128,7 @@ export default async function AdminPedidosInsumosPage() {
         enviadoEtiqueta: enviadoEn,
         creadoEtiqueta: creadoEn,
         comentarioAdmin: typeof r.comentario_admin === "string" ? r.comentario_admin : null,
+        comentarioPosta: typeof r.comentario_posta === "string" ? r.comentario_posta : null,
         detalle,
       });
     }

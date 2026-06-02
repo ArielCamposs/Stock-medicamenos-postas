@@ -10,7 +10,10 @@ import {
 } from "@/lib/auth/session";
 import { registrarAuditLog } from "@/lib/audit/stock-audit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { sincronizarStockInsumosDesdePedido } from "@/app/actions/stock-insumos";
+import {
+  sincronizarStockInsumosDesdePedido,
+  sumarPedidoInsumosRecibidoAlStock,
+} from "@/app/actions/stock-insumos";
 import { validarPedidoInsumosNoMismoDia } from "@/lib/posta/reglas-repeticion-dia";
 
 export type PedidoInsumosActionState = {
@@ -240,7 +243,7 @@ export async function cambiarEstadoPedidoInsumosAdminAction(
   const pedidoId = formData.get("pedido_id")?.toString().trim();
   const estadoNuevo = formData.get("estado")?.toString().trim();
   const comentario = formData.get("comentario_admin")?.toString().trim() ?? "";
-  const estadosPermitidos = new Set(["OBSERVADO", "RECHAZADO", "APROBADO", "DESPACHADO", "RECIBIDO"]);
+  const estadosPermitidos = new Set(["OBSERVADO", "RECHAZADO", "APROBADO", "DESPACHADO"]);
 
   if (!pedidoId || !estadoNuevo || !estadosPermitidos.has(estadoNuevo)) {
     return { error: "Estado de pedido no válido." };
@@ -262,7 +265,6 @@ export async function cambiarEstadoPedidoInsumosAdminAction(
     ENVIADO: ["OBSERVADO", "RECHAZADO", "APROBADO"],
     OBSERVADO: ["APROBADO", "RECHAZADO"],
     APROBADO: ["DESPACHADO"],
-    DESPACHADO: ["RECIBIDO"],
   };
   if (!(transiciones[estado] ?? []).includes(estadoNuevo)) {
     return { error: `No se puede pasar un pedido desde ${estado} a ${estadoNuevo}.` };
@@ -280,7 +282,10 @@ export async function cambiarEstadoPedidoInsumosAdminAction(
     update.fecha_aprobacion = now;
     update.aprobado_por_usuario_id = ctx.user.id;
   }
-  if (estadoNuevo === "RECIBIDO") update.recibido_en = now;
+  if (estadoNuevo === "DESPACHADO") {
+    update.despachado_en = now;
+    update.comentario_posta = null;
+  }
 
   const { error: upErr } = await supabase
     .from("pedidos_insumos")
@@ -370,4 +375,116 @@ export async function actualizarInsumoAdminAction(
 
   revalidatePath("/admin/insumos");
   return { ok: true, success: `Insumo actualizado.` };
+}
+
+/** La posta confirma si le llegó el pedido despachado; solo ella puede pasar a RECIBIDO. */
+export async function confirmarRecepcionPedidoInsumosPostaAction(
+  postaId: string,
+  _prev: PedidoInsumosActionState,
+  formData: FormData
+): Promise<PedidoInsumosActionState> {
+  const gate = await assertEncargadoPosta(postaId);
+  if (!gate.ok) return { error: gate.error };
+
+  const pedidoId = formData.get("pedido_id")?.toString().trim();
+  const recibidoRaw = formData.get("recibido")?.toString().trim();
+  const comentario = formData.get("comentario_posta")?.toString().trim() ?? "";
+
+  if (!pedidoId) return { error: "Pedido no válido." };
+  if (recibidoRaw !== "si" && recibidoRaw !== "no") {
+    return { error: "Indica si recibiste el pedido o no." };
+  }
+  if (recibidoRaw === "no" && comentario.length > 500) {
+    return { error: "El comentario no puede superar 500 caracteres." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: row, error: selErr } = await supabase
+    .from("pedidos_insumos")
+    .select("id, posta_id, estado")
+    .eq("id", pedidoId)
+    .eq("posta_id", postaId)
+    .maybeSingle();
+
+  if (selErr || !row || typeof row !== "object") {
+    return { error: "No se encontró el pedido." };
+  }
+
+  const estado = (row as { estado: string }).estado;
+  if (estado !== "DESPACHADO") {
+    return { error: "Este pedido no está pendiente de confirmación de recepción." };
+  }
+
+  const now = new Date().toISOString();
+
+  if (recibidoRaw === "si") {
+    const stockRes = await sumarPedidoInsumosRecibidoAlStock(supabase, postaId, pedidoId);
+    if (!stockRes.ok) return { error: stockRes.error };
+
+    const { data: updRows, error: upErr } = await supabase
+      .from("pedidos_insumos")
+      .update({
+        estado: "RECIBIDO",
+        recibido_en: now,
+        comentario_posta: null,
+      })
+      .eq("id", pedidoId)
+      .eq("posta_id", postaId)
+      .eq("estado", "DESPACHADO")
+      .select("id");
+
+    if (upErr) return { error: upErr.message };
+    if (!updRows?.length) {
+      return { error: "No se pudo confirmar la recepción. Recarga la página." };
+    }
+
+    await registrarAuditLog(supabase, {
+      actorId: gate.userId,
+      action: "pedido_insumos.recibido_posta",
+      entity: "pedidos_insumos",
+      entityId: pedidoId,
+      metadata: { postaId, stockSumado: stockRes.cambios },
+    });
+
+    revalidatePath(`/postas/${postaId}/insumos`);
+    revalidatePath(`/postas/${postaId}/dashboard`);
+    revalidatePath("/admin/pedidos-insumos");
+
+    const nSumados = stockRes.cambios.length;
+    const msgStock =
+      nSumados > 0
+        ? " Se sumaron las cantidades pedidas a tu stock de insumos."
+        : "";
+    return {
+      ok: true,
+      success: `Recepción confirmada. Administración verá el pedido como recibido.${msgStock}`,
+    };
+  }
+
+  const { error: upErr } = await supabase
+    .from("pedidos_insumos")
+    .update({
+      comentario_posta: comentario || "La posta indica que el pedido no llegó.",
+    })
+    .eq("id", pedidoId)
+    .eq("posta_id", postaId)
+    .eq("estado", "DESPACHADO");
+
+  if (upErr) return { error: upErr.message };
+
+  await registrarAuditLog(supabase, {
+    actorId: gate.userId,
+    action: "pedido_insumos.no_recibido_posta",
+    entity: "pedidos_insumos",
+    entityId: pedidoId,
+    metadata: { postaId, comentario: comentario || null },
+  });
+
+  revalidatePath(`/postas/${postaId}/insumos`);
+  revalidatePath("/admin/pedidos-insumos");
+  return {
+    ok: true,
+    success:
+      "Registramos que no recibiste el pedido. Administración fue notificada; puedes volver a indicar cuando llegue.",
+  };
 }

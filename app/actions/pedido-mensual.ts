@@ -11,6 +11,7 @@ import {
 import { registrarAuditLog } from "@/lib/audit/stock-audit";
 import { cantidadPedidoSegunStockReferencial } from "@/lib/domain/pedido-mensual";
 import { cargarPedidosMensualesMes } from "@/lib/posta/pedidos-mensuales-por-tipo";
+import { validarPedidoMensualNoMismoDia } from "@/lib/posta/reglas-repeticion-dia";
 import { snapshotLedgerMesPosta, type MedLedgerMin } from "@/lib/posta/snapshot-ledger-mes-posta";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -108,18 +109,32 @@ async function obtenerOCrearPedidoBorrador(
     return { ok: false, error: pedidosMes.error };
   }
 
-  const row = tipo === "CONTRA_RECETA" ? pedidosMes.contraReceta : pedidosMes.general;
+  const vista = tipo === "CONTRA_RECETA" ? pedidosMes.contraReceta : pedidosMes.general;
+  const etiqueta = tipo === "CONTRA_RECETA" ? "contra receta" : "general";
 
-  if (row) {
-    const estado = row.estado;
-    if (estado !== "BORRADOR" && estado !== "OBSERVADO") {
-      const etiqueta = tipo === "CONTRA_RECETA" ? "contra receta" : "general";
-      return {
-        ok: false,
-        error: `El pedido ${etiqueta} de este mes ya fue enviado.`,
-      };
+  if (vista.pedidoEnProceso) {
+    return {
+      ok: false,
+      error: `Hay un pedido ${etiqueta} en trámite. Espera a que administración lo resuelva antes de enviar otro.`,
+    };
+  }
+
+  if (vista.pedido) {
+    const estado = vista.pedido.estado;
+    if (estado === "BORRADOR" || estado === "OBSERVADO") {
+      return { ok: true, pedidoId: vista.pedido.id };
     }
-    return { ok: true, pedidoId: row.id };
+    return {
+      ok: false,
+      error: `Este pedido ${etiqueta} no se puede modificar en su estado actual.`,
+    };
+  }
+
+  if (vista.pedidoEnviadoHoy) {
+    return {
+      ok: false,
+      error: `Ya enviaste el pedido ${etiqueta} hoy. Puedes enviar otro mañana si lo necesitas.`,
+    };
   }
 
   const { data: created, error } = await supabase
@@ -271,6 +286,9 @@ export async function pedidoMensualSubmitAction(
   const supabase = await createServerSupabaseClient();
   const up = await upsertDetalleDesdeFormulario(supabase, postaId, anio, mes, gate.userId, formData, tipo);
   if (!up.ok) return { error: up.error };
+
+  const diaOk = await validarPedidoMensualNoMismoDia(supabase, postaId, tipo, up.pedidoId);
+  if (!diaOk.ok) return { error: diaOk.error };
 
   const { data: updRows, error: stErr } = await supabase
     .from("pedidos_mensuales")

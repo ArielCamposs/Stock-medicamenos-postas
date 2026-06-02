@@ -64,7 +64,7 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
   const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
   const puedeRegistrar = puedeRegistrarPorRol && !cierre;
 
-  const [{ data: medicamentos }, { data: lotesRows }, { data: postaMeta }, { data: pedidoRow }, { data: ingresadoEstesMes }] = await Promise.all([
+  const [{ data: medicamentos }, { data: lotesRows }, { data: postaMeta }, { data: pedidosGeneralRows }, { data: ingresadoEstesMes }] = await Promise.all([
     supabase
       .from("medicamentos")
       .select(
@@ -100,8 +100,7 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
       .eq("anio", anio)
       .eq("mes", mes)
       .eq("tipo", "GENERAL")
-      .in("estado", ["ENVIADO", "APROBADO", "OBSERVADO", "DESPACHADO", "RECIBIDO"])
-      .maybeSingle(),
+      .in("estado", ["ENVIADO", "APROBADO", "OBSERVADO", "DESPACHADO", "RECIBIDO"]),
     // Total ingresado por medicamento en este mes (no anulado).
     supabase
       .from("ingresos_stock_mes")
@@ -142,23 +141,23 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
   }
   const totalIngresadoMes = Object.values(ingresadoPorMed).reduce((a, b) => a + b, 0);
 
-  // Cargar detalle del pedido mensual enviado para este mes (si existe).
-  const pedidoId =
-    pedidoRow && typeof pedidoRow === "object" && "id" in pedidoRow
-      ? String((pedidoRow as { id: string }).id)
-      : null;
+  // Sumar cantidades pedidas en todos los pedidos generales enviados del mes.
+  const pedidoIds = (pedidosGeneralRows ?? [])
+    .map((row) => (row as { id?: unknown }).id)
+    .filter((id): id is string => typeof id === "string");
 
   const cantidadPedidaPorMed: Record<string, number> = {};
-  if (pedidoId) {
+  if (pedidoIds.length > 0) {
     const { data: detalleRows } = await supabase
       .from("detalle_pedido_mensual")
       .select("medicamento_id, cantidad_final")
-      .eq("pedido_id", pedidoId);
+      .in("pedido_id", pedidoIds);
     if (detalleRows && Array.isArray(detalleRows)) {
       for (const row of detalleRows) {
         const r = row as Record<string, unknown>;
         if (typeof r.medicamento_id === "string") {
-          cantidadPedidaPorMed[r.medicamento_id] = toInt(r.cantidad_final);
+          cantidadPedidaPorMed[r.medicamento_id] =
+            (cantidadPedidaPorMed[r.medicamento_id] ?? 0) + toInt(r.cantidad_final);
         }
       }
     }
@@ -298,7 +297,7 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
               medicamentos={meds}
               mesContableYm={mesContableYm}
               ledgerPorMedicamento={ledgerPorMedicamento}
-              hayPedidoMes={pedidoId !== null}
+              hayPedidoMes={pedidoIds.length > 0}
               totalIngresadoMes={totalIngresadoMes}
               fechaApunteIngreso={fechaApunteIngreso}
               ingresoBloqueadoMismoDia={ingresoBloqueadoMismoDia}

@@ -123,10 +123,60 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-x-hidden;
   }
   html {
-    @apply font-sans;
+    @apply font-sans overflow-x-hidden;
+  }
+}
+
+/* Scroll horizontal en subnavs y tablas */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+}
+
+.scroll-subnav {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 0.75rem,
+    black calc(100% - 0.75rem),
+    transparent
+  );
+}
+
+/* Barra inferior fija en postas (móvil) */
+:root {
+  --posta-bottom-nav-height: 3.75rem;
+}
+
+.pb-posta-nav {
+  padding-bottom: calc(var(--posta-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .pb-posta-nav {
+    padding-bottom: 0;
+  }
+}
+
+.fixed-above-posta-nav {
+  bottom: calc(var(--posta-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .fixed-above-posta-nav {
+    bottom: 0;
   }
 }
 
