@@ -64,8 +64,35 @@ export function compararMedicamentoPorCategoriaNombre(
   return nombreA.localeCompare(nombreB, "es", { sensitivity: "base" });
 }
 
-/** Orden de cabeceras de grupo en tablas y pedidos (incluye categoría legada CONTRA_RECETA). */
+/** Orden de cabeceras de grupo en tablas y pedidos de posta (incluye categoría legada CONTRA_RECETA). */
 export const CATEGORIAS_AGRUPACION_UI = MEDICAMENTO_CATEGORIAS;
+
+/** Agrupación y filtros en administración (sin categoría enum CONTRA_RECETA). */
+export const CATEGORIAS_AGRUPACION_ADMIN = MEDICAMENTO_CATEGORIAS.filter(
+  (c) => c !== "CONTRA_RECETA"
+);
+
+/** Presentación en listados admin: la categoría legada CONTRA_RECETA no tiene cabecera propia. */
+export function categoriaAgrupacionAdmin(
+  categoria: MedicamentoCategoria | string | null | undefined
+): MedicamentoCategoria {
+  const cat = normalizarMedicamentoCategoria(categoria);
+  return cat === "CONTRA_RECETA" ? "OTROS" : cat;
+}
+
+export function compararMedicamentoPorCategoriaAdminNombre(
+  categoriaA: MedicamentoCategoria | string | null | undefined,
+  nombreA: string,
+  categoriaB: MedicamentoCategoria | string | null | undefined,
+  nombreB: string
+): number {
+  return compararMedicamentoPorCategoriaNombre(
+    categoriaAgrupacionAdmin(categoriaA),
+    nombreA,
+    categoriaAgrupacionAdmin(categoriaB),
+    nombreB
+  );
+}
 
 /** Categoría tal como está en catálogo, para agrupar filas (sin remapear a Otros). */
 export function categoriaAgrupacionListado(

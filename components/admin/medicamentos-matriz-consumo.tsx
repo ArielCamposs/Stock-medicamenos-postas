@@ -12,12 +12,12 @@ import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  CATEGORIAS_AGRUPACION_UI,
-  categoriaAgrupacionListado,
+  CATEGORIAS_AGRUPACION_ADMIN,
+  CATEGORIAS_CATALOGO_FORMULARIO,
+  categoriaAgrupacionAdmin,
   esMedicamentoContraReceta,
   etiquetaMedicamentoCategoria,
-  MEDICAMENTO_CATEGORIAS,
-  compararMedicamentoPorCategoriaAgrupacionNombre,
+  compararMedicamentoPorCategoriaAdminNombre,
   normalizarMedicamentoCategoria,
   type MedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
@@ -105,7 +105,7 @@ function medicamentoPasaFiltroCategoria(
   categoriaFiltro: MedicamentoCategoria | ""
 ) {
   if (!categoriaFiltro) return true;
-  return normalizarMedicamentoCategoria(m.categoria) === categoriaFiltro;
+  return categoriaAgrupacionAdmin(m.categoria) === categoriaFiltro;
 }
 
 type FiltroContraReceta = "" | "contra_receta" | "general";
@@ -154,17 +154,17 @@ function MatrizStockTabla({
   const filasOrdenadas = useMemo(
     () =>
       [...medicamentosVisibles].sort((a, b) =>
-        compararMedicamentoPorCategoriaAgrupacionNombre(a.categoria, a.nombre, b.categoria, b.nombre)
+        compararMedicamentoPorCategoriaAdminNombre(a.categoria, a.nombre, b.categoria, b.nombre)
       ),
     [medicamentosVisibles]
   );
 
   const grupos = useMemo(() => {
-    const g: { cat: (typeof CATEGORIAS_AGRUPACION_UI)[number]; meds: MedicamentoMatrizRow[] }[] =
+    const g: { cat: (typeof CATEGORIAS_AGRUPACION_ADMIN)[number]; meds: MedicamentoMatrizRow[] }[] =
       [];
-    for (const cat of CATEGORIAS_AGRUPACION_UI) {
+    for (const cat of CATEGORIAS_AGRUPACION_ADMIN) {
       const meds = filasOrdenadas.filter(
-        (m) => categoriaAgrupacionListado(m.categoria) === cat
+        (m) => categoriaAgrupacionAdmin(m.categoria) === cat
       );
       if (meds.length > 0) g.push({ cat, meds });
     }
@@ -465,7 +465,7 @@ export function MedicamentosMatrizConsumo({
           className={selectFiltroClassName}
         >
           <option value="">Todas las categorías</option>
-          {MEDICAMENTO_CATEGORIAS.map((value) => (
+          {CATEGORIAS_CATALOGO_FORMULARIO.map((value) => (
             <option key={value} value={value}>
               {etiquetaMedicamentoCategoria[value]}
             </option>

@@ -175,9 +175,6 @@ export default async function AdminMedicamentosPage() {
   /** Medicamento + Stock + Crít. + cada posta + Total */
   const colsTotales = 4 + postasActivas.length;
 
-  const nCategoriaContraRecetaLegada = medicamentos.filter(
-    (m) => m.categoria === "CONTRA_RECETA"
-  ).length;
   const nOtrosCatalogo = medicamentos.filter((m) => m.categoria === "OTROS").length;
 
   return (
@@ -210,17 +207,6 @@ export default async function AdminMedicamentosPage() {
       {error ? (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           No se pudieron cargar los medicamentos: {error.message}
-        </p>
-      ) : null}
-
-      {nCategoriaContraRecetaLegada > 0 ? (
-        <p className="rounded-md border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-50">
-          Hay{" "}
-          <strong className="tabular-nums">{nCategoriaContraRecetaLegada}</strong> medicamento
-          {nCategoriaContraRecetaLegada === 1 ? "" : "s"} en la categoría legada{" "}
-          <strong>Contra receta (sin presentación)</strong>. No son “Otros”: edítalos y asigna
-          Comprimidos, Frascos, etc.; el pedido contra receta se controla con el checkbox, no con
-          esa categoría.
         </p>
       ) : null}
 
