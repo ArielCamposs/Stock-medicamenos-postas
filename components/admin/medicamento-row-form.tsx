@@ -102,6 +102,9 @@ export function MedicamentoRowForm({
             required
             defaultValue={medicamento.nombre}
           />
+          <p className="text-[11px] text-muted-foreground">
+            Debe ser único en el catálogo (no se repite aunque cambien mayúsculas o espacios).
+          </p>
         </div>
 
         <div className="space-y-2 sm:col-span-2">

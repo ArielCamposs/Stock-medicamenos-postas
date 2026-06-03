@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  obtenerFilasConciliacionCierre,
   parseDetalleDesdeResumenCierre,
   type FilaConciliacionCierre,
 } from "@/lib/posta/cierre-conciliacion-filas";
@@ -76,6 +77,98 @@ export type HistorialCierreMensualItem = {
   };
   detalle: FilaConciliacionCierre[] | null;
 };
+
+export type ResumenTarjetasCierre = {
+  disponible: number;
+  avis: number;
+  diferencias: number;
+  bajoCritico: number;
+};
+
+export function resumenTarjetasDesdeResumenCierre(
+  resumen: Record<string, unknown>
+): ResumenTarjetasCierre {
+  const p = parseResumenHistorial(resumen);
+  return {
+    disponible: p.totalDisponible,
+    avis: p.totalAvis,
+    diferencias: p.diferenciasAvis,
+    bajoCritico: p.bajoCritico,
+  };
+}
+
+export function resumenTarjetasDesdeFilas(
+  filas: FilaConciliacionCierre[]
+): ResumenTarjetasCierre {
+  return {
+    disponible: filas.reduce((acc, f) => acc + f.disponible, 0),
+    avis: filas.reduce((acc, f) => acc + f.stockAvis, 0),
+    diferencias: filas.filter((f) => f.diferenciaAvis !== 0).length,
+    bajoCritico: filas.filter(
+      (f) => f.stock_critico > 0 && f.disponible <= f.stock_critico
+    ).length,
+  };
+}
+
+export type VistaCierreMes = {
+  cierre: CierreMensualEstado | null;
+  filas: FilaConciliacionCierre[];
+  resumen: ResumenTarjetasCierre;
+  /** Datos congelados al cerrar el mes (recomendado para meses pasados cerrados). */
+  origen: "snapshot" | "calculado";
+};
+
+/** Conciliación del mes: snapshot si está cerrado; si no, cálculo en vivo. */
+export async function cargarVistaCierreMes(
+  supabase: SupabaseClient,
+  postaId: string,
+  anio: number,
+  mes: number
+): Promise<VistaCierreMes> {
+  const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
+
+  if (cierre) {
+    const filasGuardadas = parseDetalleDesdeResumenCierre(cierre.resumen);
+    if (filasGuardadas && filasGuardadas.length > 0) {
+      return {
+        cierre,
+        filas: filasGuardadas,
+        resumen: resumenTarjetasDesdeResumenCierre(cierre.resumen),
+        origen: "snapshot",
+      };
+    }
+  }
+
+  const { filas, resumen: resumenCalc } = await obtenerFilasConciliacionCierre(
+    supabase,
+    postaId,
+    anio,
+    mes
+  );
+
+  return {
+    cierre,
+    filas,
+    resumen: {
+      disponible: resumenCalc.disponible,
+      avis: resumenCalc.avis,
+      diferencias: resumenCalc.diferencias,
+      bajoCritico: resumenCalc.bajoCritico,
+    },
+    origen: "calculado",
+  };
+}
+
+/** Metadatos del cierre sin recalcular filas (avisos en otras pantallas del mes). */
+export function vistaCierreDesdeRegistro(cierre: CierreMensualEstado): VistaCierreMes {
+  const filasGuardadas = parseDetalleDesdeResumenCierre(cierre.resumen);
+  return {
+    cierre,
+    filas: filasGuardadas ?? [],
+    resumen: resumenTarjetasDesdeResumenCierre(cierre.resumen),
+    origen: filasGuardadas && filasGuardadas.length > 0 ? "snapshot" : "calculado",
+  };
+}
 
 function parseResumenHistorial(raw: unknown): HistorialCierreMensualItem["resumen"] {
   const base = {

@@ -1,9 +1,13 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
+import type { MedicamentoCategoria } from "@/lib/domain/medicamento-categoria";
+import { agruparLineasPedidoPorCategoria } from "@/lib/posta/agrupar-lineas-pedido-por-categoria";
+
 export type PedidoPdfLinea = {
   nombre: string;
   codigo_interno: string;
   unidad_medida: string;
+  categoria: MedicamentoCategoria;
   stock_recomendado: number;
   disponible: number;
   cantidad_sugerida: number;
@@ -16,6 +20,7 @@ export type PedidoPdfInput = {
   anio: number;
   mes: number;
   estado: string;
+  tipo?: "GENERAL" | "CONTRA_RECETA";
   enviadoEnLabel: string | null;
   lineas: PedidoPdfLinea[];
 };
@@ -44,7 +49,11 @@ export async function buildPedidoMensualPdfBytes(input: PedidoPdfInput): Promise
 
   const tituloMes = `${String(input.mes).padStart(2, "0")}/${input.anio}`;
 
-  page.drawText("Pedido mensual - medicamentos", {
+  const tituloDoc =
+    input.tipo === "CONTRA_RECETA"
+      ? "Pedido mensual - contra receta"
+      : "Pedido mensual - general";
+  page.drawText(tituloDoc, {
     x: 48,
     y,
     size: sizeTitle,
@@ -72,32 +81,79 @@ export async function buildPedidoMensualPdfBytes(input: PedidoPdfInput): Promise
   /** X de inicio por columna (A4 ~595pt, margen 48). Más aire entre Unidad y Stock para códigos largos de unidad. */
   const colX = [48, 222, 292, 352, 412, 472];
   const headers = ["Medicamento", "Unidad", "Stock", "Disp.", "Sug.", "Pedido"];
-  page.drawText(headers[0], { x: colX[0], y, size: 9, font: fontBold });
-  page.drawText(headers[1], { x: colX[1], y, size: 9, font: fontBold });
-  page.drawText(headers[2], { x: colX[2], y, size: 9, font: fontBold });
-  page.drawText(headers[3], { x: colX[3], y, size: 9, font: fontBold });
-  page.drawText(headers[4], { x: colX[4], y, size: 9, font: fontBold });
-  page.drawText(headers[5], { x: colX[5], y, size: 9, font: fontBold });
-  y -= 14;
-  page.drawLine({ start: { x: 48, y: y + 4 }, end: { x: pageW - 48, y: y + 4 }, thickness: 0.5, color: rgb(0.75, 0.75, 0.78) });
-  y -= 6;
-
   const rowH = 13;
+  const catHeaderH = 18;
   const bottom = 56;
+  const grupos = agruparLineasPedidoPorCategoria(input.lineas);
 
-  for (const ln of input.lineas) {
-    if (y < bottom) {
-      page = doc.addPage([pageW, pageH]);
-      y = pageH - 48;
+  const dibujarEncabezadosTabla = () => {
+    page.drawText(headers[0], { x: colX[0], y, size: 9, font: fontBold });
+    page.drawText(headers[1], { x: colX[1], y, size: 9, font: fontBold });
+    page.drawText(headers[2], { x: colX[2], y, size: 9, font: fontBold });
+    page.drawText(headers[3], { x: colX[3], y, size: 9, font: fontBold });
+    page.drawText(headers[4], { x: colX[4], y, size: 9, font: fontBold });
+    page.drawText(headers[5], { x: colX[5], y, size: 9, font: fontBold });
+    y -= 14;
+    page.drawLine({
+      start: { x: 48, y: y + 4 },
+      end: { x: pageW - 48, y: y + 4 },
+      thickness: 0.5,
+      color: rgb(0.75, 0.75, 0.78),
+    });
+    y -= 6;
+  };
+
+  const nuevaPaginaConTabla = () => {
+    page = doc.addPage([pageW, pageH]);
+    y = pageH - 48;
+    dibujarEncabezadosTabla();
+  };
+
+  const asegurarEspacio = (altura: number) => {
+    if (y < bottom + altura) {
+      nuevaPaginaConTabla();
     }
-    const label = esc(`${ln.nombre} (${ln.codigo_interno})`, 36);
-    page.drawText(label, { x: colX[0], y, size: 8, font });
-    page.drawText(esc(ln.unidad_medida, 14), { x: colX[1], y, size: 8, font });
-    page.drawText(String(ln.stock_recomendado), { x: colX[2], y, size: 8, font });
-    page.drawText(String(ln.disponible), { x: colX[3], y, size: 8, font });
-    page.drawText(String(ln.cantidad_sugerida), { x: colX[4], y, size: 8, font });
-    page.drawText(String(ln.cantidad_final), { x: colX[5], y, size: 8, font: fontBold });
-    y -= rowH;
+  };
+
+  dibujarEncabezadosTabla();
+
+  for (const grupo of grupos) {
+    asegurarEspacio(catHeaderH + rowH);
+    page.drawRectangle({
+      x: 48,
+      y: y - 4,
+      width: pageW - 96,
+      height: 14,
+      color: rgb(0.93, 0.94, 0.96),
+    });
+    page.drawText(esc(grupo.etiqueta, 60), {
+      x: 52,
+      y: y - 1,
+      size: 9,
+      font: fontBold,
+      color: rgb(0.15, 0.2, 0.35),
+    });
+    page.drawText(`Subtotal: ${grupo.subtotalUnidades}`, {
+      x: colX[5] - 52,
+      y: y - 1,
+      size: 8,
+      font,
+      color: rgb(0.35, 0.38, 0.45),
+    });
+    y -= catHeaderH;
+
+    for (const ln of grupo.lineas) {
+      asegurarEspacio(rowH);
+      const label = esc(`${ln.nombre} (${ln.codigo_interno})`, 36);
+      page.drawText(label, { x: colX[0], y, size: 8, font });
+      page.drawText(esc(ln.unidad_medida, 14), { x: colX[1], y, size: 8, font });
+      page.drawText(String(ln.stock_recomendado), { x: colX[2], y, size: 8, font });
+      page.drawText(String(ln.disponible), { x: colX[3], y, size: 8, font });
+      page.drawText(String(ln.cantidad_sugerida), { x: colX[4], y, size: 8, font });
+      page.drawText(String(ln.cantidad_final), { x: colX[5], y, size: 8, font: fontBold });
+      y -= rowH;
+    }
+    y -= 4;
   }
 
   y -= 8;

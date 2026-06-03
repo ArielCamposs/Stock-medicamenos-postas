@@ -7,6 +7,11 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { MedicamentoEditDialog } from "@/components/admin/medicamento-edit-dialog";
 import type { MedicamentoRow } from "@/components/admin/medicamento-row-form";
+import {
+  CategoriaGrupoCabeceraContenido,
+  CategoriasColapsarTodasBar,
+  useCategoriasColapsables,
+} from "@/components/medicamentos/categoria-grupo-colapsable";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +84,8 @@ type MatrizTablaProps = {
   puedeEditarFicha: boolean;
   onEditarMedicamento?: (id: string) => void;
   contenedorClassName?: string;
+  estaExpandida: (cat: string) => boolean;
+  onToggleCategoria: (cat: string) => void;
 };
 
 function normalizaBusqueda(s: string) {
@@ -150,6 +157,8 @@ function MatrizStockTabla({
   puedeEditarFicha,
   onEditarMedicamento,
   contenedorClassName,
+  estaExpandida,
+  onToggleCategoria,
 }: MatrizTablaProps) {
   const filasOrdenadas = useMemo(
     () =>
@@ -231,22 +240,26 @@ function MatrizStockTabla({
           </tr>
         </thead>
         <tbody>
-          {grupos.map(({ cat, meds }) => (
+          {grupos.map(({ cat, meds }) => {
+            const expandida = estaExpandida(cat);
+            return (
             <Fragment key={cat}>
               <tr className="border-b border-border bg-muted/90">
                 <td
                   colSpan={4 + postas.length}
-                  className="sticky left-0 z-[28] bg-muted/80 px-3 py-2.5 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:shadow-[4px_0_12px_-4px_rgba(0,0,0,0.35)]"
+                  className="sticky left-0 z-[28] bg-muted/80 px-2 py-1 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:shadow-[4px_0_12px_-4px_rgba(0,0,0,0.35)]"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
-                      {etiquetaMedicamentoCategoria[cat]}
-                    </span>
-                  </div>
+                  <CategoriaGrupoCabeceraContenido
+                    etiqueta={etiquetaMedicamentoCategoria[cat]}
+                    expandida={expandida}
+                    onToggle={() => onToggleCategoria(cat)}
+                    cantidad={meds.length}
+                    className="px-1 py-1.5"
+                  />
                 </td>
               </tr>
-              {meds.map((med) => {
+              {expandida
+                ? meds.map((med) => {
                 const porPosta = stockFinalPorMedYPosta.get(med.id);
                 const totalStockPostas = postas.reduce(
                   (acc, p) => acc + (porPosta?.get(p.id) ?? 0),
@@ -350,9 +363,11 @@ function MatrizStockTabla({
                     </td>
                   </tr>
                 );
-              })}
+              })
+                : null}
             </Fragment>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -427,11 +442,23 @@ export function MedicamentosMatrizConsumo({
   const hayFiltrosActivos =
     consulta.trim() !== "" || categoriaFiltro !== "" || filtroContraReceta !== "";
 
+  const colapsables = useCategoriasColapsables();
+  const forzarExpandidas = consulta.trim() !== "";
+
+  const categoriasVisibles = useMemo(() => {
+    const presentes = new Set(
+      medicamentosFiltrados.map((m) => categoriaAgrupacionAdmin(m.categoria))
+    );
+    return CATEGORIAS_AGRUPACION_ADMIN.filter((c) => presentes.has(c));
+  }, [medicamentosFiltrados]);
+
   const matrizPropsBase = {
     postas,
     stockFinalPorMedYPosta,
     puedeEditarFicha,
     onEditarMedicamento: puedeEditarFicha ? abrirEdicion : undefined,
+    estaExpandida: (cat: string) => colapsables.estaExpandida(cat, forzarExpandidas),
+    onToggleCategoria: colapsables.toggle,
   };
 
   const renderFiltros = (scope: "main" | "modal") => (
@@ -518,6 +545,11 @@ export function MedicamentosMatrizConsumo({
         />
       ) : null}
       {renderFiltros("main")}
+      <CategoriasColapsarTodasBar
+        categorias={categoriasVisibles}
+        onExpandirTodas={colapsables.expandirTodas}
+        onColapsarTodas={colapsables.colapsarTodas}
+      />
       <p className="text-xs text-muted-foreground">
         Mostrando {medicamentosFiltrados.length} de {medicamentos.length} medicamentos
         {categoriaFiltro
@@ -622,8 +654,13 @@ export function MedicamentosMatrizConsumo({
                 </Dialog.Close>
               </div>
 
-              <div className="shrink-0 border-b bg-background px-4 py-3 sm:px-5">
+              <div className="shrink-0 space-y-2 border-b bg-background px-4 py-3 sm:px-5">
                 {renderFiltros("modal")}
+                <CategoriasColapsarTodasBar
+                  categorias={categoriasVisibles}
+                  onExpandirTodas={colapsables.expandirTodas}
+                  onColapsarTodas={colapsables.colapsarTodas}
+                />
               </div>
 
               <div className="min-h-0 min-w-0 flex-1 overflow-auto px-2 pb-4 pt-2 sm:px-4">

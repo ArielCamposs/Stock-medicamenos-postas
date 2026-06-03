@@ -24,10 +24,9 @@ import {
   anioMesActual,
   permiteCierreMensualCalendarioOperacion,
 } from "@/lib/domain/fecha-mes";
-import { obtenerFilasConciliacionCierre } from "@/lib/posta/cierre-conciliacion-filas";
 import {
+  cargarVistaCierreMes,
   listarHistorialCierresMensualesPosta,
-  obtenerCierreMensualPosta,
 } from "@/lib/posta/cierre-mensual";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -60,16 +59,15 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
   const puedeReabrir = esAdminGeneral(profile);
   const supabase = await createServerSupabaseClient();
 
-  const [cierre, historialResult, filasResult] = await Promise.all([
-    obtenerCierreMensualPosta(supabase, postaId, anio, mes),
+  const [vistaResult, historialResult] = await Promise.all([
+    cargarVistaCierreMes(supabase, postaId, anio, mes).catch(
+      (e): { error: string } => ({
+        error: e instanceof Error ? e.message : "Error al cargar el cierre del mes.",
+      })
+    ),
     listarHistorialCierresMensualesPosta(supabase, postaId).catch(
       (e): { error: string } => ({
         error: e instanceof Error ? e.message : "No se pudo cargar el historial.",
-      })
-    ),
-    obtenerFilasConciliacionCierre(supabase, postaId, anio, mes).catch(
-      (e): { error: string } => ({
-        error: e instanceof Error ? e.message : "Error al calcular los totales del mes.",
       })
     ),
   ]);
@@ -78,18 +76,13 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
   const errorHistorial =
     "error" in historialResult ? historialResult.error : null;
 
-  const errorMostrar =
-    "error" in filasResult ? filasResult.error : null;
-  const filas = "error" in filasResult ? [] : filasResult.filas;
-
-  const resumen = {
-    disponible: filas.reduce((acc, f) => acc + f.disponible, 0),
-    avis: filas.reduce((acc, f) => acc + f.stockAvis, 0),
-    diferencias: filas.filter((f) => f.diferenciaAvis !== 0).length,
-    bajoCritico: filas.filter(
-      (f) => f.stock_critico > 0 && f.disponible <= f.stock_critico
-    ).length,
-  };
+  const errorMostrar = "error" in vistaResult ? vistaResult.error : null;
+  const cierre = "error" in vistaResult ? null : vistaResult.cierre;
+  const filas = "error" in vistaResult ? [] : vistaResult.filas;
+  const resumen = "error" in vistaResult
+    ? { disponible: 0, avis: 0, diferencias: 0, bajoCritico: 0 }
+    : vistaResult.resumen;
+  const origenVista = "error" in vistaResult ? "calculado" : vistaResult.origen;
 
   const puedeCerrarSegunCalendario =
     !cierre && puedeCerrar && permiteCierreMensualCalendarioOperacion(anio, mes);
@@ -101,7 +94,12 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
         description="Revisión del stock según el registro frente al stock AVIS antes de cerrar el mes."
       />
 
-      <PostaMesToolbar basePath={basePath} anio={anio} mes={mes} />
+      <PostaMesToolbar
+        basePath={basePath}
+        anio={anio}
+        mes={mes}
+        mesCerrado={Boolean(cierre)}
+      />
 
       {errorMostrar ? (
         <Card className="border-destructive/40">
@@ -125,11 +123,16 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
                   <CardTitle className="text-lg">
                     {cierre ? "Cierre del mes" : "Mes en curso"}
                   </CardTitle>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    {cierre
-                      ? `Cerrado el ${new Date(cierre.cerradoEn).toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" })}`
-                      : ""}
-                  </p>
+                  {cierre ? (
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Cerrado el{" "}
+                      {new Date(cierre.cerradoEn).toLocaleString("es-CL", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                      . Los movimientos del mes están bloqueados.
+                    </p>
+                  ) : null}
                 </div>
                 {cierre ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-muted border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
@@ -145,20 +148,11 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {cierre ? (
-                <p className="text-sm text-muted-foreground">
-                  Cerrado el{" "}
-                  {new Date(cierre.cerradoEn).toLocaleString("es-CL", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}
-                  . Los movimientos del mes están bloqueados.
-                </p>
-              ) : (
+              {!cierre ? (
                 <p className="text-sm text-muted-foreground">
                   Mientras el mes esté abierto se pueden registrar y corregir movimientos.
                 </p>
-              )}
+              ) : null}
               <CierreResumenTarjetas resumen={resumen} />
               {!cierre && puedeCerrar ? (
                 <div className="space-y-2">
@@ -184,6 +178,20 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Conciliación registro vs AVIS</CardTitle>
+              {cierre && origenVista === "snapshot" ? (
+                <p className="text-sm font-normal text-muted-foreground">
+                  Valores guardados al cerrar el mes (no se recalculan con datos actuales).
+                </p>
+              ) : cierre && origenVista === "calculado" ? (
+                <p className="text-sm font-normal text-amber-800 dark:text-amber-200">
+                  Este mes está cerrado, pero no hay detalle guardado en el historial. La tabla
+                  siguiente se calcula con los datos actuales y puede diferir del cierre original.
+                </p>
+              ) : (
+                <p className="text-sm font-normal text-muted-foreground">
+                  Totales según el registro del mes (cierre anterior + ingresos − descuentos).
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               <CierreConciliacionTabla filas={filas} />
@@ -196,8 +204,8 @@ export default async function CierreMensualPostaPage({ params, searchParams }: P
         <CardHeader>
           <CardTitle className="text-lg">Historial de cierres</CardTitle>
           <p className="text-sm text-muted-foreground font-normal">
-            Todos los cierres de mes realizados en esta posta. Haz clic en una fila para ver el
-            detalle.
+            Todos los cierres realizados en esta posta. Abre un mes para ver la tabla guardada al
+            cerrar.
           </p>
         </CardHeader>
         <CardContent>

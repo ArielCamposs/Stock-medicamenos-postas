@@ -9,6 +9,7 @@ import {
   requirePerfilUsuario,
 } from "@/lib/auth/session";
 import { registrarAuditLog } from "@/lib/audit/stock-audit";
+import { esMedicamentoContraReceta } from "@/lib/domain/medicamento-categoria";
 import { cantidadPedidoSegunStockReferencial } from "@/lib/domain/pedido-mensual";
 import { cargarPedidosMensualesMes } from "@/lib/posta/pedidos-mensuales-por-tipo";
 import { validarPedidoMensualNoMismoDia } from "@/lib/posta/reglas-repeticion-dia";
@@ -22,6 +23,14 @@ export type PedidoMensualActionState = {
 };
 
 type SupabaseSrv = Awaited<ReturnType<typeof createServerSupabaseClient>>;
+
+function revalidateVistasPedidoMensual(postaId: string) {
+  revalidatePath(`/postas/${postaId}/pedidos`);
+  revalidatePath(`/postas/${postaId}/dashboard`);
+  revalidatePath(`/postas/${postaId}/ingresos`);
+  revalidatePath("/admin/pedidos");
+  revalidatePath("/bodega");
+}
 
 async function assertEncargadoPosta(postaId: string) {
   const ctx = await requirePerfilUsuario();
@@ -89,9 +98,15 @@ async function idsMedicamentosContraReceta(supabase: SupabaseSrv): Promise<Set<s
   for (const row of data ?? []) {
     const r = row as Record<string, unknown>;
     if (typeof r.id !== "string") continue;
-    const esFlag = r.es_contra_receta === true;
-    const cat = typeof r.categoria === "string" ? r.categoria : "";
-    if (esFlag || cat === "CONTRA_RECETA") set.add(r.id);
+    if (
+      esMedicamentoContraReceta({
+        es_contra_receta: r.es_contra_receta === true,
+        categoria:
+          typeof r.categoria === "string" ? r.categoria : undefined,
+      })
+    ) {
+      set.add(r.id);
+    }
   }
   return set;
 }
@@ -352,13 +367,7 @@ export async function cambiarEstadoPedidoMensualAdminAction(
   const pedidoId = formData.get("pedido_id")?.toString().trim();
   const estadoNuevo = formData.get("estado")?.toString().trim();
   const comentario = formData.get("comentario_admin")?.toString().trim() ?? "";
-  const estadosPermitidos = new Set([
-    "OBSERVADO",
-    "RECHAZADO",
-    "APROBADO",
-    "DESPACHADO",
-    "RECIBIDO",
-  ]);
+  const estadosPermitidos = new Set(["OBSERVADO", "RECHAZADO", "APROBADO"]);
 
   if (!pedidoId || !estadoNuevo || !estadosPermitidos.has(estadoNuevo)) {
     return { error: "Estado de pedido no válido." };
@@ -377,8 +386,6 @@ export async function cambiarEstadoPedidoMensualAdminAction(
   const estado = (row as { estado: string }).estado;
   const transiciones: Record<string, string[]> = {
     ENVIADO: ["OBSERVADO", "RECHAZADO", "APROBADO"],
-    APROBADO: ["DESPACHADO"],
-    DESPACHADO: ["RECIBIDO"],
   };
   if (!(transiciones[estado] ?? []).includes(estadoNuevo)) {
     return { error: `No se puede pasar un pedido desde ${estado} a ${estadoNuevo}.` };
@@ -397,7 +404,6 @@ export async function cambiarEstadoPedidoMensualAdminAction(
     update.aprobado_por_usuario_id = ctx.user.id;
   }
   if (estadoNuevo === "DESPACHADO") update.despachado_en = now;
-  if (estadoNuevo === "RECIBIDO") update.recibido_en = now;
 
   const { error: upErr } = await supabase
     .from("pedidos_mensuales")
@@ -474,5 +480,154 @@ export async function togglePedidoBandejaListoAdminAction(
   return {
     ok: true,
     success: marcar ? "Marcado como listo en la bandeja." : "Listo quitado; el pedido sigue en el historial.",
+  };
+}
+
+/** La posta confirma recepción del pedido despachado; cantidades editables si llegó menos. */
+export async function confirmarRecepcionPedidoMensualPostaAction(
+  postaId: string,
+  _prev: PedidoMensualActionState,
+  formData: FormData
+): Promise<PedidoMensualActionState> {
+  const gate = await assertEncargadoPosta(postaId);
+  if (!gate.ok) return { error: gate.error };
+
+  const pedidoId = formData.get("pedido_id")?.toString().trim();
+  const tipoRaw = formData.get("tipo_pedido")?.toString().trim();
+  const tipo: TipoPedido = tipoRaw === "CONTRA_RECETA" ? "CONTRA_RECETA" : "GENERAL";
+
+  if (!pedidoId) return { error: "Pedido no válido." };
+
+  let medicamentoIds: string[] = [];
+  try {
+    const parsed = JSON.parse(formData.get("medicamento_ids_json")?.toString() ?? "[]");
+    if (!Array.isArray(parsed)) throw new Error("not array");
+    medicamentoIds = parsed.filter((x): x is string => typeof x === "string");
+  } catch {
+    return { error: "Datos del formulario inválidos. Recarga la página." };
+  }
+
+  const {
+    parseLineasRecepcionDesdeFormulario,
+    registrarRecepcionPedidoMensual,
+  } = await import("@/lib/posta/registrar-recepcion-pedido-mensual");
+
+  const parsedLineas = parseLineasRecepcionDesdeFormulario(formData, medicamentoIds);
+  if (!parsedLineas.ok) return { error: parsedLineas.error };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: row, error: selErr } = await supabase
+    .from("pedidos_mensuales")
+    .select("id, posta_id, anio, mes, estado, tipo")
+    .eq("id", pedidoId)
+    .eq("posta_id", postaId)
+    .maybeSingle();
+
+  if (selErr || !row || typeof row !== "object") {
+    return { error: "No se encontró el pedido." };
+  }
+
+  const estado = String((row as { estado: string }).estado);
+  if (estado !== "DESPACHADO") {
+    return { error: "Este pedido no está pendiente de confirmación de recepción." };
+  }
+
+  const anio = Number((row as { anio: unknown }).anio);
+  const mes = Number((row as { mes: unknown }).mes);
+
+  const res = await registrarRecepcionPedidoMensual(supabase, {
+    postaId,
+    pedidoId,
+    userId: gate.userId,
+    anio,
+    mes,
+    tipoPedido: tipo,
+    lineasRecibidas: parsedLineas.lineas,
+  });
+
+  if (!res.ok) return { error: res.error };
+
+  await registrarAuditLog(supabase, {
+    actorId: gate.userId,
+    action: "pedido_mensual.recibido_posta",
+    entity: "pedidos_mensuales",
+    entityId: pedidoId,
+    metadata: {
+      postaId,
+      tipo,
+      nLineasStock: res.nLineasStock,
+      totalUnidades: res.totalUnidades,
+    },
+  });
+
+  revalidateVistasPedidoMensual(postaId);
+
+  const msgStock =
+    res.nLineasStock > 0
+      ? ` Se sumaron ${res.totalUnidades} unidad${res.totalUnidades === 1 ? "" : "es"} a tu stock del mes.`
+      : "";
+  return {
+    ok: true,
+    success: `Recepción confirmada.${msgStock}`,
+  };
+}
+
+export async function registrarPedidoMensualNoRecibidoPostaAction(
+  postaId: string,
+  _prev: PedidoMensualActionState,
+  formData: FormData
+): Promise<PedidoMensualActionState> {
+  const gate = await assertEncargadoPosta(postaId);
+  if (!gate.ok) return { error: gate.error };
+
+  const pedidoId = formData.get("pedido_id")?.toString().trim();
+  const comentario = formData.get("comentario_posta")?.toString().trim() ?? "";
+
+  if (!pedidoId) return { error: "Pedido no válido." };
+  if (comentario.length > 500) {
+    return { error: "El comentario no puede superar 500 caracteres." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: row, error: selErr } = await supabase
+    .from("pedidos_mensuales")
+    .select("id, posta_id, estado")
+    .eq("id", pedidoId)
+    .eq("posta_id", postaId)
+    .maybeSingle();
+
+  if (selErr || !row || typeof row !== "object") {
+    return { error: "No se encontró el pedido." };
+  }
+
+  if ((row as { estado: string }).estado !== "DESPACHADO") {
+    return { error: "Este pedido no está pendiente de confirmación de recepción." };
+  }
+
+  const { error: upErr } = await supabase
+    .from("pedidos_mensuales")
+    .update({
+      comentario_posta: comentario || "La posta indica que el pedido no llegó.",
+    })
+    .eq("id", pedidoId)
+    .eq("posta_id", postaId)
+    .eq("estado", "DESPACHADO");
+
+  if (upErr) return { error: upErr.message };
+
+  await registrarAuditLog(supabase, {
+    actorId: gate.userId,
+    action: "pedido_mensual.no_recibido_posta",
+    entity: "pedidos_mensuales",
+    entityId: pedidoId,
+    metadata: { postaId, comentario: comentario || null },
+  });
+
+  revalidateVistasPedidoMensual(postaId);
+
+  return {
+    ok: true,
+    success:
+      "Registramos que no recibiste el pedido. Administración fue notificada; puedes volver a indicar cuando llegue.",
   };
 }

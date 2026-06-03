@@ -16,7 +16,11 @@ import {
   normalizarMedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
 import { snapshotLedgerMesPosta } from "@/lib/posta/snapshot-ledger-mes-posta";
-import { obtenerCierreMensualPosta } from "@/lib/posta/cierre-mensual";
+import { CierreMesVistaAviso } from "@/components/posta/cierre-mes-vista-aviso";
+import {
+  obtenerCierreMensualPosta,
+  vistaCierreDesdeRegistro,
+} from "@/lib/posta/cierre-mensual";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +71,7 @@ export default async function PostaDescuentoPage({ params, searchParams }: PageP
   const puedeRegistrarPorRol = puedeRegistrarOperacionesPosta(profile, postaId);
   const supabase = await createServerSupabaseClient();
   const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
+  const vistaCierreMes = cierre ? vistaCierreDesdeRegistro(cierre) : null;
   const puedeRegistrar = puedeRegistrarPorRol && !cierre;
   const soloLecturaDescuentoVariante = !puedeRegistrar
     ? esAdminGeneral(profile)
@@ -346,16 +351,26 @@ export default async function PostaDescuentoPage({ params, searchParams }: PageP
       }) ?? [];
 
     return (
-      <DescuentoPageClient
-        postaId={postaId}
-        basePath={basePath}
-        anio={anio}
-        mes={mes}
-        puedeRegistrar={puedeRegistrar}
-        soloLecturaDescuentoVariante={soloLecturaDescuentoVariante}
-        medicamentos={payload}
-        ultimosRows={rows}
-      />
+      <div className="space-y-4">
+        {vistaCierreMes ? (
+          <CierreMesVistaAviso
+            postaId={postaId}
+            anio={anio}
+            mes={mes}
+            vista={vistaCierreMes}
+          />
+        ) : null}
+        <DescuentoPageClient
+          postaId={postaId}
+          basePath={basePath}
+          anio={anio}
+          mes={mes}
+          puedeRegistrar={puedeRegistrar}
+          soloLecturaDescuentoVariante={soloLecturaDescuentoVariante}
+          medicamentos={payload}
+          ultimosRows={rows}
+        />
+      </div>
     );
   } catch (e) {
     const msg =

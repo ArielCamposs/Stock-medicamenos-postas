@@ -12,6 +12,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  CategoriaGrupoCabeceraContenido,
+  CategoriasColapsarTodasBar,
+  useCategoriasColapsables,
+} from "@/components/medicamentos/categoria-grupo-colapsable";
 import { StockNivelLeyenda } from "@/components/posta/stock-nivel-leyenda";
 import {
   CATEGORIAS_AGRUPACION_UI,
@@ -44,12 +49,22 @@ export function StockTablaDashboard({
   descuentoMesHref: string;
 }) {
   const [busqueda, setBusqueda] = useState("");
+  const colapsables = useCategoriasColapsables();
+  const forzarExpandidas = busqueda.trim() !== "";
 
   const filasFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return filas;
     return filas.filter((f) => f.nombre.toLowerCase().includes(q));
   }, [filas, busqueda]);
+
+  const categoriasVisibles = useMemo(
+    () =>
+      CATEGORIAS_AGRUPACION_UI.filter((cat) =>
+        filasFiltradas.some((f) => categoriaAgrupacionListado(f.categoria) === cat)
+      ),
+    [filasFiltradas]
+  );
 
   return (
     <Card size="sm" className="border border-border/80 shadow-sm bg-card/40 backdrop-blur-sm overflow-hidden">
@@ -127,6 +142,13 @@ export function StockTablaDashboard({
           </div>
         ) : (
           <>
+            <div className="border-b border-border/40 px-4 py-2.5 sm:px-5">
+              <CategoriasColapsarTodasBar
+                categorias={categoriasVisibles}
+                onExpandirTodas={colapsables.expandirTodas}
+                onColapsarTodas={colapsables.colapsarTodas}
+              />
+            </div>
             {/* Desktop Table View */}
             <div className="hidden md:block max-h-[min(70vh,36rem)] overflow-auto">
               <table className="w-full min-w-[38rem] text-left text-sm border-collapse">
@@ -147,23 +169,22 @@ export function StockTablaDashboard({
                       (f) => categoriaAgrupacionListado(f.categoria) === cat
                     );
                     if (rows.length === 0) return null;
-                    const itemsCount = rows.length;
+                    const expandida = colapsables.estaExpandida(cat, forzarExpandidas);
                     return (
                       <Fragment key={cat}>
                         <tr className="border-y-2 border-border/60 bg-muted/60">
-                          <td colSpan={7} className="px-3 py-2.5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
-                                <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">{etiquetaMedicamentoCategoria[cat]}</span>
-                              </div>
-                              <span className="font-mono text-[10px] font-semibold text-muted-foreground/80 bg-muted/95 px-2 py-0.5 rounded-full border border-border/60 normal-case tracking-normal">
-                                {itemsCount} {itemsCount === 1 ? "ítem" : "ítems"}
-                              </span>
-                            </div>
+                          <td colSpan={7} className="px-2 py-1">
+                            <CategoriaGrupoCabeceraContenido
+                              etiqueta={etiquetaMedicamentoCategoria[cat]}
+                              expandida={expandida}
+                              onToggle={() => colapsables.toggle(cat)}
+                              cantidad={rows.length}
+                              className="px-1 py-1.5"
+                            />
                           </td>
                         </tr>
-                        {rows.map((f) => {
+                        {expandida
+                          ? rows.map((f) => {
                           const maxVal = Math.max(f.stockRec, f.disponible, 1);
                           const pct = Math.min(100, Math.round((f.disponible / maxVal) * 100));
                           const critPct = Math.min(95, Math.max(5, Math.round((f.stockCrit / maxVal) * 100)));
@@ -260,7 +281,8 @@ export function StockTablaDashboard({
                               </td>
                             </tr>
                           );
-                        })}
+                        })
+                          : null}
                       </Fragment>
                     );
                   })}
@@ -275,23 +297,20 @@ export function StockTablaDashboard({
                   (f) => categoriaAgrupacionListado(f.categoria) === cat
                 );
                 if (rows.length === 0) return null;
-                const itemsCount = rows.length;
+                const expandida = colapsables.estaExpandida(cat, forzarExpandidas);
                 return (
                   <div key={cat} className="bg-muted/5">
-                    {/* Header de Categoría */}
-                    <div className="sticky top-0 z-10 border-y-2 border-border/60 bg-muted/80 backdrop-blur-sm px-3 py-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
-                        <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
-                          {etiquetaMedicamentoCategoria[cat]}
-                        </span>
-                      </div>
-                      <span className="font-mono text-[9px] font-semibold text-muted-foreground/80 bg-background px-2 py-0.5 rounded-full border border-border/60">
-                        {itemsCount} {itemsCount === 1 ? "ítem" : "ítems"}
-                      </span>
+                    <div className="sticky top-0 z-10 border-y-2 border-border/60 bg-muted/80 px-2 py-1 backdrop-blur-sm">
+                      <CategoriaGrupoCabeceraContenido
+                        etiqueta={etiquetaMedicamentoCategoria[cat]}
+                        expandida={expandida}
+                        onToggle={() => colapsables.toggle(cat)}
+                        cantidad={rows.length}
+                        className="px-1 py-1.5"
+                      />
                     </div>
 
-                    {/* Insumos */}
+                    {expandida ? (
                     <div className="divide-y divide-border/40 bg-background">
                       {rows.map((f) => {
                         const maxVal = Math.max(f.stockRec, f.disponible, 1);
@@ -379,6 +398,7 @@ export function StockTablaDashboard({
                         );
                       })}
                     </div>
+                    ) : null}
                   </div>
                 );
               })}

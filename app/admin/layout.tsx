@@ -3,23 +3,12 @@ import { redirect } from "next/navigation";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { AdminSubnav } from "@/components/admin/admin-subnav";
 import { DesamLogo } from "@/components/brand/desam-logo";
+import { etiquetaRolUsuario } from "@/lib/auth/etiqueta-rol";
 import {
   esAdminGeneral,
   requirePerfilUsuario,
   tieneAccesoGlobalAdmin,
 } from "@/lib/auth/session";
-
-function etiquetaRol(rol: string): string {
-  const r = rol.toLowerCase();
-  const mapa: Record<string, string> = {
-    encargado_posta: "Encargada/o de Postas",
-    posta_manager: "Encargada/o de Postas",
-    admin_general: "Administradora Postas",
-    supervision_posta: "Supervisión",
-    read_only: "Supervisión",
-  };
-  return mapa[r] ?? rol.replaceAll("_", " ");
-}
 
 export default async function AdminLayout({
   children,
@@ -54,10 +43,12 @@ export default async function AdminLayout({
                   <p className="font-semibold text-foreground max-w-[14rem] truncate">
                     {profile.email ?? profile.id}
                   </p>
-                  <p className="text-[10px] text-muted-foreground/80 mt-0.5">{etiquetaRol(profile.rol)}</p>
+                  <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+                    {etiquetaRolUsuario(profile.rol)}
+                  </p>
                 </div>
                 <span className="sm:hidden rounded-full bg-primary/10 border border-primary/15 px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold text-primary">
-                  {etiquetaRol(profile.rol)}
+                  {etiquetaRolUsuario(profile.rol)}
                 </span>
               </div>
               <SignOutButton

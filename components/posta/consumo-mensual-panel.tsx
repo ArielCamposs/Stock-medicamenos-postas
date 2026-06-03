@@ -3,6 +3,11 @@
 import { Package } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  CategoriaGrupoCabeceraContenido,
+  CategoriasColapsarTodasBar,
+  useCategoriasColapsables,
+} from "@/components/medicamentos/categoria-grupo-colapsable";
 import { ConsumoDiaModal } from "@/components/posta/consumo-dia-modal";
 import { DescuentoOfflineBar } from "@/components/posta/descuento-offline-bar";
 import { StockNivelLeyenda } from "@/components/posta/stock-nivel-leyenda";
@@ -282,6 +287,16 @@ export function ConsumoMensualPanel({
     [mergedMeds, query]
   );
 
+  const colapsables = useCategoriasColapsables();
+  const forzarExpandidas = query.length > 0;
+  const categoriasVisibles = useMemo(
+    () =>
+      CATEGORIAS_AGRUPACION_UI.filter((cat) =>
+        medicamentosFiltrados.some((m) => categoriaAgrupacionListado(m.categoria) === cat)
+      ),
+    [medicamentosFiltrados]
+  );
+
   /** Top 5 por suma de descuentos del mes (con+sin AVIS por día). */
   const topDescuentoMes = useMemo(() => {
     const conTotal = mergedMeds.map((m) => ({
@@ -353,6 +368,14 @@ export function ConsumoMensualPanel({
 
       <StockNivelLeyenda className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2" />
 
+      {mergedMeds.length > 0 && medicamentosFiltrados.length > 0 ? (
+        <CategoriasColapsarTodasBar
+          categorias={categoriasVisibles}
+          onExpandirTodas={colapsables.expandirTodas}
+          onColapsarTodas={colapsables.colapsarTodas}
+        />
+      ) : null}
+
       {mergedMeds.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-8 py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg bg-muted/5">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground/70 mb-4 border border-border/40">
@@ -406,19 +429,25 @@ export function ConsumoMensualPanel({
               (m) => categoriaAgrupacionListado(m.categoria) === cat
             );
             if (lista.length === 0) return null;
+            const expandida = colapsables.estaExpandida(cat, forzarExpandidas);
             return (
               <section key={cat} className="space-y-3">
-                <h3 className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/70 px-3 py-2">
-                  <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
-                    {etiquetaMedicamentoCategoria[cat]}
-                  </span>
-                </h3>
+                <div className="rounded-md border border-border/60 bg-muted/70 px-2 py-1">
+                  <CategoriaGrupoCabeceraContenido
+                    etiqueta={etiquetaMedicamentoCategoria[cat]}
+                    expandida={expandida}
+                    onToggle={() => colapsables.toggle(cat)}
+                    cantidad={lista.length}
+                    className="px-1 py-1.5"
+                  />
+                </div>
+                {expandida ? (
                 <div className="space-y-6">
                   {lista.map((m) => (
                     <MedicamentoMesCard key={m.id} med={m} onOpen={setAbierta} />
                   ))}
                 </div>
+                ) : null}
               </section>
             );
           })}

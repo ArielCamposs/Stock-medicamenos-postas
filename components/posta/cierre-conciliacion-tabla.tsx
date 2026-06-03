@@ -1,5 +1,33 @@
+"use client";
+
+import { Fragment, useMemo, useState } from "react";
+
+import {
+  CategoriaGrupoCabeceraContenido,
+  CategoriasColapsarTodasBar,
+  useCategoriasColapsables,
+} from "@/components/medicamentos/categoria-grupo-colapsable";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  CATEGORIAS_AGRUPACION_UI,
+  categoriaAgrupacionListado,
+  etiquetaMedicamentoCategoria,
+} from "@/lib/domain/medicamento-categoria";
 import type { FilaConciliacionCierre } from "@/lib/posta/cierre-conciliacion-filas";
 import { cn } from "@/lib/utils";
+
+function normalizaBusqueda(s: string) {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function filaCoincideBusqueda(f: FilaConciliacionCierre, q: string) {
+  if (!q) return true;
+  const nombre = f.nombre.toLowerCase();
+  const codigo = f.codigo.toLowerCase();
+  return nombre.includes(q) || codigo.includes(q);
+}
 
 function filaToneClasses(f: FilaConciliacionCierre) {
   const tieneDiferencia = f.diferenciaAvis !== 0;
@@ -90,7 +118,95 @@ function CierreFilaMobile({ f }: { f: FilaConciliacionCierre }) {
   );
 }
 
+function CierreFilaDesktop({ f }: { f: FilaConciliacionCierre }) {
+  const { bajoCritico, rowClass, borderClass } = filaToneClasses(f);
+  return (
+    <tr className={cn("border-b border-border/70 transition-colors", rowClass)}>
+      <td className={cn("px-2 py-2.5 border-l-4", borderClass)}>
+        <span className="font-medium">{f.nombre}</span>
+        <span className="ml-1 text-xs text-muted-foreground">
+          ({f.codigo} · {f.unidad})
+        </span>
+      </td>
+      <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
+        {f.cierreAnterior}
+      </td>
+      <td className="px-2 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">
+        {f.ingresoMes > 0 ? `+${f.ingresoMes}` : f.ingresoMes}
+      </td>
+      <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
+        {f.descuentoMes}
+      </td>
+      <td
+        className={cn(
+          "px-2 py-2.5 text-right font-semibold tabular-nums",
+          bajoCritico && "text-rose-600 dark:text-rose-400"
+        )}
+      >
+        {f.disponible}
+      </td>
+      <td className="px-2 py-2.5 text-right tabular-nums">{f.stockAvis}</td>
+      <td
+        className={cn(
+          "px-2 py-2.5 text-right font-semibold tabular-nums",
+          f.diferenciaAvis > 0
+            ? "text-emerald-700 dark:text-emerald-400"
+            : f.diferenciaAvis < 0
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-muted-foreground"
+        )}
+      >
+        {f.diferenciaAvis > 0 ? `+${f.diferenciaAvis}` : f.diferenciaAvis}
+      </td>
+    </tr>
+  );
+}
+
+function CierreListadoSinResultados({
+  busqueda,
+  onLimpiar,
+}: {
+  busqueda: string;
+  onLimpiar: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-muted/15 px-4 py-10 text-center">
+      <p className="text-sm font-semibold text-foreground">
+        No hay medicamentos con esta búsqueda
+      </p>
+      <p className="mt-1 max-w-md mx-auto text-xs text-muted-foreground">
+        No encontramos coincidencias para «{busqueda}». Prueba con otro nombre o código interno.
+      </p>
+      <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onLimpiar}>
+        Limpiar búsqueda
+      </Button>
+    </div>
+  );
+}
+
 export function CierreConciliacionTabla({ filas }: { filas: FilaConciliacionCierre[] }) {
+  const [busqueda, setBusqueda] = useState("");
+  const queryBusqueda = useMemo(() => normalizaBusqueda(busqueda), [busqueda]);
+  const colapsables = useCategoriasColapsables();
+  const forzarExpandidas = queryBusqueda.length > 0;
+
+  const filasVisibles = useMemo(
+    () => filas.filter((f) => filaCoincideBusqueda(f, queryBusqueda)),
+    [filas, queryBusqueda]
+  );
+
+  const nCoincidencias = filasVisibles.length;
+
+  const categoriasConDatos = useMemo(
+    () =>
+      CATEGORIAS_AGRUPACION_UI.filter((cat) =>
+        filasVisibles.some(
+          (f) => categoriaAgrupacionListado(f.categoria) === cat
+        )
+      ),
+    [filasVisibles]
+  );
+
   if (filas.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -99,80 +215,123 @@ export function CierreConciliacionTabla({ filas }: { filas: FilaConciliacionCier
     );
   }
 
+  const sinResultadosBusqueda = queryBusqueda.length > 0 && nCoincidencias === 0;
+
   return (
-    <>
-      {/* Escritorio */}
-      <div className="hidden overflow-x-auto rounded-lg border md:block">
-        <table className="w-full min-w-[54rem] border-collapse text-sm">
-          <thead>
-            <tr className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
-              <th className="px-2 py-2">Medicamento</th>
-              <th className="px-2 py-2 text-right">Cierre ant.</th>
-              <th className="px-2 py-2 text-right">Ingresos</th>
-              <th className="px-2 py-2 text-right">Descuentos</th>
-              <th className="px-2 py-2 text-right">Registro</th>
-              <th className="px-2 py-2 text-right">AVIS</th>
-              <th className="px-2 py-2 text-right">Dif.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filas.map((f) => {
-              const { bajoCritico, tieneDiferencia, rowClass, borderClass } = filaToneClasses(f);
-              return (
-                <tr
-                  key={f.id}
-                  className={cn("border-b border-border/70 transition-colors", rowClass)}
-                >
-                  <td className={cn("px-2 py-2.5 border-l-4", borderClass)}>
-                    <span className="font-medium">{f.nombre}</span>
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      ({f.codigo} · {f.unidad})
-                    </span>
-                  </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {f.cierreAnterior}
-                  </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">
-                    {f.ingresoMes > 0 ? `+${f.ingresoMes}` : f.ingresoMes}
-                  </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {f.descuentoMes}
-                  </td>
-                  <td
-                    className={cn(
-                      "px-2 py-2.5 text-right font-semibold tabular-nums",
-                      bajoCritico && "text-rose-600 dark:text-rose-400"
-                    )}
-                  >
-                    {f.disponible}
-                  </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums">{f.stockAvis}</td>
-                  <td
-                    className={cn(
-                      "px-2 py-2.5 text-right font-semibold tabular-nums",
-                      f.diferenciaAvis > 0
-                        ? "text-emerald-700 dark:text-emerald-400"
-                        : f.diferenciaAvis < 0
-                          ? "text-amber-600 dark:text-amber-400"
-                          : "text-muted-foreground"
-                    )}
-                  >
-                    {f.diferenciaAvis > 0 ? `+${f.diferenciaAvis}` : f.diferenciaAvis}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-0 flex-1 space-y-1.5" style={{ minWidth: "14rem" }}>
+          <Label htmlFor="cierre-buscar-med" className="text-xs font-medium">
+            Buscar medicamento
+          </Label>
+          <Input
+            id="cierre-buscar-med"
+            type="search"
+            autoComplete="off"
+            placeholder="Nombre o código interno…"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
       </div>
 
-      {/* Móvil */}
-      <div className="divide-y divide-border/60 rounded-lg border md:hidden">
-        {filas.map((f) => (
-          <CierreFilaMobile key={f.id} f={f} />
-        ))}
-      </div>
-    </>
+      {queryBusqueda && nCoincidencias > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground tabular-nums">{nCoincidencias}</span> de{" "}
+          {filas.length} {filas.length === 1 ? "medicamento" : "medicamentos"}
+        </p>
+      ) : null}
+
+      {categoriasConDatos.length > 0 ? (
+        <CategoriasColapsarTodasBar
+          categorias={categoriasConDatos}
+          onExpandirTodas={colapsables.expandirTodas}
+          onColapsarTodas={() => colapsables.colapsarTodas(categoriasConDatos)}
+        />
+      ) : null}
+
+      {sinResultadosBusqueda ? (
+        <CierreListadoSinResultados
+          busqueda={busqueda.trim()}
+          onLimpiar={() => setBusqueda("")}
+        />
+      ) : (
+        <>
+          <div className="hidden overflow-x-auto rounded-lg border md:block">
+            <table className="w-full min-w-[54rem] border-collapse text-sm">
+              <thead>
+                <tr className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
+                  <th className="px-2 py-2">Medicamento</th>
+                  <th className="px-2 py-2 text-right">Cierre ant.</th>
+                  <th className="px-2 py-2 text-right">Ingresos</th>
+                  <th className="px-2 py-2 text-right">Descuentos</th>
+                  <th className="px-2 py-2 text-right">Registro</th>
+                  <th className="px-2 py-2 text-right">AVIS</th>
+                  <th className="px-2 py-2 text-right">Dif.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CATEGORIAS_AGRUPACION_UI.map((cat) => {
+                  const lineasCat = filasVisibles.filter(
+                    (f) => categoriaAgrupacionListado(f.categoria) === cat
+                  );
+                  if (lineasCat.length === 0) return null;
+                  const expandida = colapsables.estaExpandida(cat, forzarExpandidas);
+                  return (
+                    <Fragment key={cat}>
+                      <tr className="border-y-2 border-border/60 bg-muted/60">
+                        <td colSpan={7} className="px-2 py-1">
+                          <CategoriaGrupoCabeceraContenido
+                            etiqueta={etiquetaMedicamentoCategoria[cat]}
+                            expandida={expandida}
+                            onToggle={() => colapsables.toggle(cat)}
+                            cantidad={lineasCat.length}
+                            className="px-1 py-1.5"
+                          />
+                        </td>
+                      </tr>
+                      {expandida
+                        ? lineasCat.map((f) => <CierreFilaDesktop key={f.id} f={f} />)
+                        : null}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="space-y-4 md:hidden">
+            {CATEGORIAS_AGRUPACION_UI.map((cat) => {
+              const lineasCat = filasVisibles.filter(
+                (f) => categoriaAgrupacionListado(f.categoria) === cat
+              );
+              if (lineasCat.length === 0) return null;
+              const expandida = colapsables.estaExpandida(cat, forzarExpandidas);
+              return (
+                <section key={cat} className="space-y-2">
+                  <div className="rounded-md border border-border/60 bg-muted/70 px-2 py-1">
+                    <CategoriaGrupoCabeceraContenido
+                      etiqueta={etiquetaMedicamentoCategoria[cat]}
+                      expandida={expandida}
+                      onToggle={() => colapsables.toggle(cat)}
+                      cantidad={lineasCat.length}
+                      className="px-1 py-1.5"
+                    />
+                  </div>
+                  {expandida ? (
+                    <div className="divide-y divide-border/60 rounded-lg border">
+                      {lineasCat.map((f) => (
+                        <CierreFilaMobile key={f.id} f={f} />
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

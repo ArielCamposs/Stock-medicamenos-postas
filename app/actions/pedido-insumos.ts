@@ -14,6 +14,12 @@ import {
   sincronizarStockInsumosDesdePedido,
   sumarPedidoInsumosRecibidoAlStock,
 } from "@/app/actions/stock-insumos";
+import {
+  buscarDuplicadoNombreCatalogo,
+  mensajeErrorNombreCatalogoDesdeDb,
+  mensajeNombreCatalogoDuplicado,
+} from "@/lib/catalogo/verificar-nombre-unico";
+import { sanitizarNombreCatalogo } from "@/lib/domain/nombre-catalogo";
 import { validarPedidoInsumosNoMismoDia } from "@/lib/posta/reglas-repeticion-dia";
 
 export type PedidoInsumosActionState = {
@@ -243,7 +249,7 @@ export async function cambiarEstadoPedidoInsumosAdminAction(
   const pedidoId = formData.get("pedido_id")?.toString().trim();
   const estadoNuevo = formData.get("estado")?.toString().trim();
   const comentario = formData.get("comentario_admin")?.toString().trim() ?? "";
-  const estadosPermitidos = new Set(["OBSERVADO", "RECHAZADO", "APROBADO", "DESPACHADO"]);
+  const estadosPermitidos = new Set(["OBSERVADO", "RECHAZADO", "APROBADO"]);
 
   if (!pedidoId || !estadoNuevo || !estadosPermitidos.has(estadoNuevo)) {
     return { error: "Estado de pedido no válido." };
@@ -264,7 +270,6 @@ export async function cambiarEstadoPedidoInsumosAdminAction(
   const transiciones: Record<string, string[]> = {
     ENVIADO: ["OBSERVADO", "RECHAZADO", "APROBADO"],
     OBSERVADO: ["APROBADO", "RECHAZADO"],
-    APROBADO: ["DESPACHADO"],
   };
   if (!(transiciones[estado] ?? []).includes(estadoNuevo)) {
     return { error: `No se puede pasar un pedido desde ${estado} a ${estadoNuevo}.` };
@@ -317,7 +322,7 @@ export async function crearInsumoAdminAction(
     return { error: "Solo administración general puede gestionar el catálogo de insumos." };
   }
 
-  const nombre = formData.get("nombre")?.toString().trim() ?? "";
+  const nombre = sanitizarNombreCatalogo(formData.get("nombre")?.toString() ?? "");
   const stockRaw = formData.get("stock_objetivo")?.toString().trim() ?? "0";
   const stockObjetivo = Number.parseInt(stockRaw, 10);
 
@@ -327,13 +332,29 @@ export async function crearInsumoAdminAction(
   }
 
   const supabase = await createServerSupabaseClient();
+  try {
+    const duplicado = await buscarDuplicadoNombreCatalogo(supabase, "insumos", nombre);
+    if (duplicado) {
+      return { error: mensajeNombreCatalogoDuplicado("insumo", duplicado.nombre) };
+    }
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "No se pudo validar el nombre del insumo.",
+    };
+  }
+
   const { error } = await supabase.from("insumos").insert({
     nombre,
     stock_objetivo: stockObjetivo,
     activo: true,
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    return {
+      error:
+        mensajeErrorNombreCatalogoDesdeDb("insumo", error) ?? error.message,
+    };
+  }
 
   revalidatePath("/admin/insumos");
   return { ok: true, success: `Insumo "${nombre}" creado.` };
@@ -349,7 +370,7 @@ export async function actualizarInsumoAdminAction(
   }
 
   const insumoId = formData.get("insumo_id")?.toString().trim();
-  const nombre = formData.get("nombre")?.toString().trim() ?? "";
+  const nombre = sanitizarNombreCatalogo(formData.get("nombre")?.toString() ?? "");
   const stockRaw = formData.get("stock_objetivo")?.toString().trim() ?? "0";
   const stockObjetivo = Number.parseInt(stockRaw, 10);
   const activoRaw = formData.get("activo")?.toString();
@@ -362,6 +383,17 @@ export async function actualizarInsumoAdminAction(
   }
 
   const supabase = await createServerSupabaseClient();
+  try {
+    const duplicado = await buscarDuplicadoNombreCatalogo(supabase, "insumos", nombre, insumoId);
+    if (duplicado) {
+      return { error: mensajeNombreCatalogoDuplicado("insumo", duplicado.nombre) };
+    }
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "No se pudo validar el nombre del insumo.",
+    };
+  }
+
   const { error } = await supabase
     .from("insumos")
     .update({
@@ -371,10 +403,107 @@ export async function actualizarInsumoAdminAction(
     })
     .eq("id", insumoId);
 
-  if (error) return { error: error.message };
+  if (error) {
+    return {
+      error:
+        mensajeErrorNombreCatalogoDesdeDb("insumo", error) ?? error.message,
+    };
+  }
 
   revalidatePath("/admin/insumos");
   return { ok: true, success: `Insumo actualizado.` };
+}
+
+async function contarLineasPedidoInsumo(
+  supabase: SupabaseSrv,
+  insumoId: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("detalle_pedido_insumos")
+    .select("*", { count: "exact", head: true })
+    .eq("insumo_id", insumoId);
+
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+export async function eliminarInsumoAdminAction(
+  _prev: PedidoInsumosActionState,
+  formData: FormData
+): Promise<PedidoInsumosActionState> {
+  const ctx = await requirePerfilUsuario();
+  if (!esAdminGeneral(ctx.profile)) {
+    return { error: "Solo administración general puede eliminar insumos del catálogo." };
+  }
+
+  const insumoId = formData.get("insumo_id")?.toString().trim();
+  if (!insumoId) return { error: "ID de insumo no válido." };
+  if (formData.get("confirmar") !== "si") {
+    return { error: "Debes confirmar la eliminación." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+
+  const { data: ins, error: insError } = await supabase
+    .from("insumos")
+    .select("id, nombre")
+    .eq("id", insumoId)
+    .maybeSingle();
+
+  if (insError) return { error: insError.message };
+  if (!ins || typeof ins.id !== "string") {
+    return { error: "El insumo no existe o ya fue eliminado." };
+  }
+
+  const nombre = typeof ins.nombre === "string" ? ins.nombre : "Insumo";
+
+  try {
+    const lineasPedido = await contarLineasPedidoInsumo(supabase, insumoId);
+    if (lineasPedido > 0) {
+      return {
+        error: `No se puede eliminar «${nombre}» porque aparece en ${lineasPedido} línea(s) de pedidos de insumos. Desactívalo (Inactivo) si solo quieres ocultarlo de los pedidos nuevos.`,
+      };
+    }
+  } catch (e) {
+    return {
+      error:
+        e instanceof Error ? e.message : "No se pudo verificar el historial del insumo.",
+    };
+  }
+
+  const { error: stockDeleteError } = await supabase
+    .from("stock_insumos_posta")
+    .delete()
+    .eq("insumo_id", insumoId);
+
+  if (stockDeleteError) {
+    return { error: stockDeleteError.message };
+  }
+
+  const { error: deleteError, count } = await supabase
+    .from("insumos")
+    .delete({ count: "exact" })
+    .eq("id", insumoId);
+
+  if (deleteError) {
+    if (deleteError.code === "23503") {
+      return {
+        error: `No se puede eliminar «${nombre}» porque aún tiene registros vinculados. Desactívalo para ocultarlo del catálogo.`,
+      };
+    }
+    return { error: deleteError.message };
+  }
+
+  if (!count) {
+    return {
+      error:
+        "No se eliminó el insumo. Aplica en Supabase las migraciones insumos_delete_admin y stock_insumos_posta_delete_admin, o verifica que tu usuario sea administración general.",
+    };
+  }
+
+  revalidatePath("/admin/insumos");
+  revalidatePath("/postas", "layout");
+  return { ok: true, success: `«${nombre}» fue eliminado del catálogo.` };
 }
 
 /** La posta confirma si le llegó el pedido despachado; solo ella puede pasar a RECIBIDO. */
@@ -449,6 +578,7 @@ export async function confirmarRecepcionPedidoInsumosPostaAction(
     revalidatePath(`/postas/${postaId}/insumos`);
     revalidatePath(`/postas/${postaId}/dashboard`);
     revalidatePath("/admin/pedidos-insumos");
+    revalidatePath("/bodega");
 
     const nSumados = stockRes.cambios.length;
     const msgStock =
@@ -482,6 +612,7 @@ export async function confirmarRecepcionPedidoInsumosPostaAction(
 
   revalidatePath(`/postas/${postaId}/insumos`);
   revalidatePath("/admin/pedidos-insumos");
+  revalidatePath("/bodega");
   return {
     ok: true,
     success:

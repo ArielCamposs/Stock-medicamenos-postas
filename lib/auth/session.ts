@@ -9,6 +9,7 @@ function normalizeRol(raw: unknown): RolUsuarioDb | null {
   const s = typeof raw === "string" ? raw.trim() : String(raw).trim();
   if (
     s === "ADMIN_GENERAL" ||
+    s === "BODEGA_FARMACIA" ||
     s === "POSTA_MANAGER" ||
     s === "READ_ONLY"
   ) {
@@ -160,6 +161,15 @@ export function tieneAccesoGlobalAdmin(profile: PerfilUsuarioRow) {
 /** Solo este rol puede crear/editar catálogo y postas en la UI admin. */
 export function esAdminGeneral(profile: PerfilUsuarioRow) {
   return profile.rol === "ADMIN_GENERAL";
+}
+
+export function esBodegaFarmacia(profile: PerfilUsuarioRow) {
+  return profile.rol === "BODEGA_FARMACIA";
+}
+
+/** Perfil central de bodega (sin posta asignada). */
+export function perfilBodegaConsistente(profile: PerfilUsuarioRow): boolean {
+  return profile.rol === "BODEGA_FARMACIA" && profile.posta_id === null;
 }
 
 export function puedeVerPosta(profile: PerfilUsuarioRow, postaId: string) {

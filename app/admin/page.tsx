@@ -651,6 +651,22 @@ export default async function AdminDashboardPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Link
+              href="/admin/usuarios"
+              className="group block rounded-xl outline-none"
+            >
+              <Card className="h-full border border-border/60 bg-card/30 hover:bg-card hover:border-primary/45 transition-all duration-200 shadow-sm hover:shadow">
+                <CardHeader className="p-5 flex flex-row items-center justify-between space-y-0 gap-4">
+                  <div className="min-w-0">
+                    <CardTitle className="text-sm font-bold text-foreground">Usuarios</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      Alta de bodega farmacia y encargados de posta.
+                    </p>
+                  </div>
+                </CardHeader>
+              </Card>
+            </Link>
+
+            <Link
               href="/admin/postas"
               className="group block rounded-xl outline-none"
             >

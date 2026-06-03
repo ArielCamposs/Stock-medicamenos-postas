@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 
 import {
+  esBodegaFarmacia,
   getSessionContext,
+  perfilBodegaConsistente,
   tieneAccesoGlobalAdmin,
 } from "@/lib/auth/session";
 
@@ -23,6 +25,13 @@ export default async function Home() {
 
   if (tieneAccesoGlobalAdmin(ctx.profile)) {
     redirect("/admin");
+  }
+
+  if (esBodegaFarmacia(ctx.profile)) {
+    if (!perfilBodegaConsistente(ctx.profile)) {
+      redirect("/login?error=perfil_inconsistente");
+    }
+    redirect("/bodega");
   }
 
   if (rol === "POSTA_MANAGER") {

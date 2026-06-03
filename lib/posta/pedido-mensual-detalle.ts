@@ -1,5 +1,6 @@
 import {
   compararMedicamentoPorCategoriaNombre,
+  esMedicamentoContraReceta,
   normalizarMedicamentoCategoria,
   type MedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
@@ -89,7 +90,8 @@ export async function cargarDetallePedidoMensual(
         nombre,
         codigo_interno,
         unidad_medida,
-        categoria
+        categoria,
+        es_contra_receta
       )
     `
     )
@@ -99,6 +101,10 @@ export async function cargarDetallePedidoMensual(
   if (de) {
     return { ok: false, error: de.message ?? "No se pudo cargar el detalle.", status: 500 };
   }
+
+  const tipoRaw = typeof row.tipo === "string" ? row.tipo : "GENERAL";
+  const tipoPedido: "GENERAL" | "CONTRA_RECETA" =
+    tipoRaw === "CONTRA_RECETA" ? "CONTRA_RECETA" : "GENERAL";
 
   const lineas: PedidoMensualDetalleLinea[] = [];
   for (const d of detalles ?? []) {
@@ -112,6 +118,13 @@ export async function cargarDetallePedidoMensual(
     const cat = normalizarMedicamentoCategoria(
       med && typeof med.categoria === "string" ? med.categoria : undefined
     );
+    const esContra = esMedicamentoContraReceta({
+      es_contra_receta: med?.es_contra_receta === true,
+      categoria: cat,
+    });
+    if (tipoPedido === "CONTRA_RECETA" ? !esContra : esContra) {
+      continue;
+    }
     lineas.push({
       medicamentoId: r.medicamento_id,
       nombre: med && typeof med.nombre === "string" ? med.nombre : "—",
@@ -130,7 +143,6 @@ export async function cargarDetallePedidoMensual(
   );
 
   const totalUnidades = lineas.reduce((acc, l) => acc + l.cantidad_final, 0);
-  const tipoRaw = typeof row.tipo === "string" ? row.tipo : "GENERAL";
   const enviadoEn =
     row.enviado_en === null || typeof row.enviado_en === "string"
       ? (row.enviado_en as string | null)
@@ -150,7 +162,7 @@ export async function cargarDetallePedidoMensual(
       anio: toInt(row.anio),
       mes: toInt(row.mes),
       estado: typeof row.estado === "string" ? row.estado : "ENVIADO",
-      tipo: tipoRaw === "CONTRA_RECETA" ? "CONTRA_RECETA" : "GENERAL",
+      tipo: tipoPedido,
       enviadoEn,
       comentarioAdmin,
       lineas,

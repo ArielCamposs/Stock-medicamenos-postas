@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  compararMedicamentoPorCategoriaNombre,
+  normalizarMedicamentoCategoria,
+  type MedicamentoCategoria,
+} from "@/lib/domain/medicamento-categoria";
 import { rangoFechasMesISO } from "@/lib/domain/fecha-mes";
 import {
   snapshotLedgerMesPosta,
@@ -11,6 +16,7 @@ export type FilaConciliacionCierre = {
   nombre: string;
   codigo: string;
   unidad: string;
+  categoria: MedicamentoCategoria;
   cierreAnterior: number;
   ingresoMes: number;
   descuentoMes: number;
@@ -19,6 +25,14 @@ export type FilaConciliacionCierre = {
   diferenciaAvis: number;
   stock_critico: number;
 };
+
+export function ordenarFilasConciliacionCierre(
+  filas: FilaConciliacionCierre[]
+): FilaConciliacionCierre[] {
+  return [...filas].sort((a, b) =>
+    compararMedicamentoPorCategoriaNombre(a.categoria, a.nombre, b.categoria, b.nombre)
+  );
+}
 
 export type ResumenConciliacionCierre = {
   totalMedicamentos: number;
@@ -49,7 +63,7 @@ export async function obtenerFilasConciliacionCierre(
     supabase
       .from("medicamentos")
       .select(
-        "id, nombre, codigo_interno, unidad_medida, stock_recomendado_default, stock_critico_default"
+        "id, nombre, codigo_interno, unidad_medida, categoria, stock_recomendado_default, stock_critico_default"
       )
       .eq("activo", true)
       .order("nombre"),
@@ -88,6 +102,7 @@ export async function obtenerFilasConciliacionCierre(
     nombre: string;
     codigo: string;
     unidad: string;
+    categoria: MedicamentoCategoria;
   })[] = [];
 
   const medicamentos = medicamentosRes.data;
@@ -100,6 +115,9 @@ export async function obtenerFilasConciliacionCierre(
         nombre: typeof r.nombre === "string" ? r.nombre : "—",
         codigo: typeof r.codigo_interno === "string" ? r.codigo_interno : "",
         unidad: typeof r.unidad_medida === "string" ? r.unidad_medida : "",
+        categoria: normalizarMedicamentoCategoria(
+          typeof r.categoria === "string" ? r.categoria : undefined
+        ),
         stock_recomendado_default: toInt(r.stock_recomendado_default),
         stock_critico_default: toInt(r.stock_critico_default),
       });
@@ -132,6 +150,7 @@ export async function obtenerFilasConciliacionCierre(
       nombre: m.nombre,
       codigo: m.codigo,
       unidad: m.unidad,
+      categoria: m.categoria,
       cierreAnterior: s?.cierre_mes_anterior ?? 0,
       ingresoMes: s?.ingreso_mes ?? 0,
       descuentoMes: s?.descuento_mes ?? 0,
@@ -152,7 +171,7 @@ export async function obtenerFilasConciliacionCierre(
     ).length,
   };
 
-  return { filas, resumen };
+  return { filas: ordenarFilasConciliacionCierre(filas), resumen };
 }
 
 export function parseDetalleDesdeResumenCierre(
@@ -172,6 +191,9 @@ export function parseDetalleDesdeResumenCierre(
       nombre: typeof r.nombre === "string" ? r.nombre : "—",
       codigo: typeof r.codigo === "string" ? r.codigo : "",
       unidad: typeof r.unidad === "string" ? r.unidad : "",
+      categoria: normalizarMedicamentoCategoria(
+        typeof r.categoria === "string" ? r.categoria : undefined
+      ),
       cierreAnterior: toInt(r.cierreAnterior),
       ingresoMes: toInt(r.ingresoMes),
       descuentoMes: toInt(r.descuentoMes),
@@ -182,5 +204,5 @@ export function parseDetalleDesdeResumenCierre(
     });
   }
 
-  return filas.length > 0 ? filas : null;
+  return filas.length > 0 ? ordenarFilasConciliacionCierre(filas) : null;
 }

@@ -7,7 +7,9 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 import { LoginForm } from "@/components/auth/login-form";
 import { buttonVariants } from "@/components/ui/button";
 import {
+  esBodegaFarmacia,
   getSessionContext,
+  perfilBodegaConsistente,
   tieneAccesoGlobalAdmin,
 } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
@@ -37,7 +39,8 @@ export default async function LoginPage({ searchParams }: PageProps) {
     const p = ctx.profile;
     const perfilBloqueado =
       (p.rol === "POSTA_MANAGER" && !p.posta_id) ||
-      (p.rol === "ADMIN_GENERAL" && p.posta_id !== null);
+      (p.rol === "ADMIN_GENERAL" && p.posta_id !== null) ||
+      (esBodegaFarmacia(p) && !perfilBodegaConsistente(p));
 
     if (!perfilBloqueado) {
       if (redirectTo !== "/") {
@@ -45,6 +48,9 @@ export default async function LoginPage({ searchParams }: PageProps) {
       }
       if (tieneAccesoGlobalAdmin(p)) {
         redirect("/admin");
+      }
+      if (esBodegaFarmacia(p)) {
+        redirect("/bodega");
       }
       if (p.rol === "POSTA_MANAGER" && p.posta_id) {
         redirect(`/postas/${p.posta_id}/dashboard`);
@@ -60,6 +66,9 @@ export default async function LoginPage({ searchParams }: PageProps) {
       errorCodigoForm = "sin_posta";
     }
     if (p.rol === "ADMIN_GENERAL" && p.posta_id !== null) {
+      errorCodigoForm = "perfil_inconsistente";
+    }
+    if (esBodegaFarmacia(p) && p.posta_id !== null) {
       errorCodigoForm = "perfil_inconsistente";
     }
   }

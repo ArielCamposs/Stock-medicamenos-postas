@@ -19,6 +19,30 @@ export type PostaStockAlertaFila = {
 
 export type NivelAlertaStock = "critico" | "cerca";
 
+/** Filtro de listados: holgado = sin alerta de stock. */
+export type NivelStockFiltro = "holgado" | "cerca" | "critico";
+
+export function nivelStockParaFiltro(
+  disponible: number,
+  stockCrit: number,
+  stockRec: number
+): NivelStockFiltro {
+  const nivel = nivelAlertaStock(disponible, stockCrit, stockRec);
+  if (nivel === "critico") return "critico";
+  if (nivel === "cerca") return "cerca";
+  return "holgado";
+}
+
+export function lineaCoincideFiltroStock(
+  disponible: number,
+  stockCrit: number,
+  stockRec: number,
+  filtro: NivelStockFiltro | null
+): boolean {
+  if (!filtro) return true;
+  return nivelStockParaFiltro(disponible, stockCrit, stockRec) === filtro;
+}
+
 /**
  * Con crítico > 0: crítico = bajo o igual al umbral; cerca = hasta un colchón sobre el crítico.
  * Con crítico = 0: crítico = sin saldo; cerca = bajo respecto al recomendado (heurística).

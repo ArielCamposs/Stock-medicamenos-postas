@@ -53,7 +53,6 @@ const INICIAL: PedidoInsumosActionState = {};
 const TRANSICIONES: Partial<Record<EstadoPedido, EstadoPedido[]>> = {
   ENVIADO: ["APROBADO", "OBSERVADO", "RECHAZADO"],
   OBSERVADO: ["APROBADO", "RECHAZADO"],
-  APROBADO: ["DESPACHADO"],
 };
 
 const ETIQUETA_ESTADO: Record<EstadoPedido, string> = {
@@ -68,7 +67,8 @@ const ETIQUETA_ESTADO: Record<EstadoPedido, string> = {
 
 const GRUPOS_ESTADO: { label: string; estados: EstadoPedido[] }[] = [
   { label: "Pendientes", estados: ["ENVIADO", "OBSERVADO"] },
-  { label: "Procesados", estados: ["APROBADO", "DESPACHADO"] },
+  { label: "Aprobados (bodega)", estados: ["APROBADO"] },
+  { label: "Despachados", estados: ["DESPACHADO"] },
   { label: "Finalizados", estados: ["RECIBIDO", "RECHAZADO"] },
 ];
 

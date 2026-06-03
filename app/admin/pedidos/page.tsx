@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AdminPedidosHistorialInteractivo } from "@/components/admin/admin-pedidos-historial-interactivo";
+import { RscAutoRefresh } from "@/components/shared/rsc-auto-refresh";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -171,6 +172,7 @@ export default async function AdminPedidosPage() {
 
   return (
     <div className="space-y-8">
+      <RscAutoRefresh />
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Pedidos mensuales</h1>
         {lista.length > 0 ? (

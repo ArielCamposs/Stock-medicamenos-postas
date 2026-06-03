@@ -8,6 +8,12 @@ import {
   normalizarMedicamentoCategoria,
   unidadMedidaDesdeCategoria,
 } from "@/lib/domain/medicamento-categoria";
+import {
+  buscarDuplicadoNombreCatalogo,
+  mensajeErrorNombreCatalogoDesdeDb,
+  mensajeNombreCatalogoDuplicado,
+} from "@/lib/catalogo/verificar-nombre-unico";
+import { sanitizarNombreCatalogo } from "@/lib/domain/nombre-catalogo";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type CatalogActionState = {
@@ -125,7 +131,7 @@ export async function createMedicamentoAction(
     return { error: "Solo un usuario con rol de administración general puede crear medicamentos." };
   }
 
-  const nombre = formData.get("nombre")?.toString().trim();
+  const nombre = sanitizarNombreCatalogo(formData.get("nombre")?.toString() ?? "");
   const categoria = normalizarMedicamentoCategoria(
     formData.get("categoria")?.toString()
   );
@@ -200,6 +206,22 @@ export async function createMedicamentoAction(
     };
   }
 
+  try {
+    const duplicado = await buscarDuplicadoNombreCatalogo(supabase, "medicamentos", nombre);
+    if (duplicado) {
+      return {
+        error: mensajeNombreCatalogoDuplicado("medicamento", duplicado.nombre),
+        values: valuesConResto,
+      };
+    }
+  } catch (e) {
+    return {
+      error:
+        e instanceof Error ? e.message : "No se pudo validar el nombre del medicamento.",
+      values: valuesConResto,
+    };
+  }
+
   let codigoInsert = codigo_interno;
   for (let intento = 0; intento < 3; intento++) {
     const { error } = await supabase.from("medicamentos").insert({
@@ -235,6 +257,10 @@ export async function createMedicamentoAction(
       };
     }
 
+    const msgNombre = mensajeErrorNombreCatalogoDesdeDb("medicamento", error);
+    if (msgNombre) {
+      return { error: msgNombre, values: valuesConResto };
+    }
     if (error.code === "23505") {
       return {
         error: "Ya existe un registro con esos datos únicos.",
@@ -265,7 +291,7 @@ export async function updateMedicamentoAction(
     return { error: "Falta el identificador del medicamento." };
   }
 
-  const nombre = formData.get("nombre")?.toString().trim();
+  const nombre = sanitizarNombreCatalogo(formData.get("nombre")?.toString() ?? "");
   const codigo_interno = formData.get("codigo_interno")?.toString().trim();
 
   if (!nombre || !codigo_interno) {
@@ -308,6 +334,19 @@ export async function updateMedicamentoAction(
   const unidad_medida = unidadMedidaDesdeCategoria(categoria);
 
   const supabase = await createServerSupabaseClient();
+
+  try {
+    const duplicado = await buscarDuplicadoNombreCatalogo(supabase, "medicamentos", nombre, id);
+    if (duplicado) {
+      return { error: mensajeNombreCatalogoDuplicado("medicamento", duplicado.nombre) };
+    }
+  } catch (e) {
+    return {
+      error:
+        e instanceof Error ? e.message : "No se pudo validar el nombre del medicamento.",
+    };
+  }
+
   const { error } = await supabase
     .from("medicamentos")
     .update({
@@ -324,7 +363,13 @@ export async function updateMedicamentoAction(
     .eq("id", id);
 
   if (error) {
-    return { error: error.message };
+    return {
+      error:
+        mensajeErrorNombreCatalogoDesdeDb("medicamento", error) ??
+        (error.code === "23505" && error.message.includes("codigo_interno")
+          ? `El código interno «${codigo_interno}» ya está en uso.`
+          : error.message),
+    };
   }
 
   revalidatePath("/admin/medicamentos");

@@ -371,10 +371,19 @@ export async function registrarIngresosStockLoteAction(
     return { error: gate.error };
   }
 
+  const ctx = await requirePerfilUsuario();
   const fecha = formData.get("fecha")?.toString().trim();
   const mesMovimiento = formData.get("mes_movimiento")?.toString().trim() ?? "";
-  const tipoOrigen = "OTRO";
-  const referencia = null;
+  const pedidoDespachadoId = formData.get("pedido_despachado_id")?.toString().trim() || null;
+
+  if (pedidoDespachadoId && !puedeGestionarPedidoMensualPosta(ctx.profile, postaId)) {
+    return {
+      error:
+        "Solo el encargado de la posta puede registrar el ingreso de un pedido despachado (general o contra receta).",
+    };
+  }
+  const tipoOrigen = pedidoDespachadoId ? "TRASLADO" : "OTRO";
+  const referencia = pedidoDespachadoId;
   const observacion = parseTextoOpcional(formData.get("observacion"));
 
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
@@ -435,6 +444,19 @@ export async function registrarIngresosStockLoteAction(
   const mismoDia = await validarIngresoMedicamentosNoMismoDia(supabase, postaId, fecha);
   if (!mismoDia.ok) return { error: mismoDia.error };
 
+  if (pedidoDespachadoId) {
+    const { validarLineasIngresoPedidoDespachado } = await import(
+      "@/lib/posta/pedido-despachado-ingreso"
+    );
+    const valPedido = await validarLineasIngresoPedidoDespachado(
+      supabase,
+      postaId,
+      pedidoDespachadoId,
+      lineas
+    );
+    if (!valPedido.ok) return { error: valPedido.error };
+  }
+
   const lote = await crearIngresoStockLote(supabase, gate, postaId, {
     fecha,
     tipoOrigen,
@@ -471,6 +493,22 @@ export async function registrarIngresosStockLoteAction(
   );
   if (sync.error) return { error: sync.error };
 
+  let pedidoCompletado = false;
+  if (pedidoDespachadoId) {
+    const { aplicarIngresoLotePedidoDespachadoActivo } = await import(
+      "@/lib/posta/pedido-despachado-ingreso"
+    );
+    const pedRes = await aplicarIngresoLotePedidoDespachadoActivo(supabase, {
+      postaId,
+      anio,
+      mes,
+      pedidoId: pedidoDespachadoId,
+      lineas,
+    });
+    if (!pedRes.ok) return { error: pedRes.error };
+    pedidoCompletado = pedRes.pedidoCompletado;
+  }
+
   await registrarAuditLog(supabase, {
     actorId: gate.userId,
     action: "ingreso_stock.lote_creado",
@@ -483,6 +521,8 @@ export async function registrarIngresosStockLoteAction(
       referencia,
       observacion,
       nLineas: lineas.length,
+      pedidoDespachadoId,
+      pedidoCompletado,
     },
   });
 
@@ -490,13 +530,23 @@ export async function registrarIngresosStockLoteAction(
   revalidatePath(`/postas/${postaId}/dashboard`);
   revalidatePath(`/postas/${postaId}/descuento`);
   revalidatePath(`/postas/${postaId}/pedidos`);
+  revalidatePath("/admin/pedidos");
+  revalidatePath("/bodega");
   revalidatePath("/admin/medicamentos");
+
+  const baseMsg =
+    lineas.length === 1
+      ? "Ingreso registrado con 1 medicamento."
+      : `Ingreso registrado con ${lineas.length} medicamentos.`;
+  const msgPedido = pedidoCompletado
+    ? " Pedido marcado como recibido; si hay otro despacho pendiente, regístralo en una nueva carga."
+    : pedidoDespachadoId
+      ? " Puedes registrar el resto del pedido en otra carga (otro día si ya ingresaste hoy)."
+      : "";
+
   return {
     ok: true,
-    success:
-      lineas.length === 1
-        ? "Ingreso registrado con 1 medicamento."
-        : `Ingreso registrado con ${lineas.length} medicamentos.`,
+    success: baseMsg + msgPedido,
   };
 }
 

@@ -23,7 +23,11 @@ import {
 } from "@/lib/domain/medicamento-categoria";
 import { cargarPedidosMensualesMes } from "@/lib/posta/pedidos-mensuales-por-tipo";
 import { snapshotLedgerMesPosta } from "@/lib/posta/snapshot-ledger-mes-posta";
-import { obtenerCierreMensualPosta } from "@/lib/posta/cierre-mensual";
+import { CierreMesVistaAviso } from "@/components/posta/cierre-mes-vista-aviso";
+import {
+  obtenerCierreMensualPosta,
+  vistaCierreDesdeRegistro,
+} from "@/lib/posta/cierre-mensual";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { TipoPedido } from "@/app/actions/pedido-mensual";
 export const dynamic = "force-dynamic";
@@ -74,6 +78,7 @@ type PedidoRowData = {
     | "RECIBIDO"
     | null;
   enviadoEtiqueta: string | null;
+  comentarioPosta: string | null;
   detalleRows: { medicamento_id: string; cantidad_sugerida: number; cantidad_final: number }[];
 };
 
@@ -82,7 +87,6 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
   const qs = await searchParams;
   const { anio, mes } = parseYm(qs?.ym);
   const ymQuery = ymParam(anio, mes);
-  const tabActiva = parseTab(qs?.tab);
 
   const ctx = await requirePerfilUsuario();
   const { profile } = ctx;
@@ -90,7 +94,10 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
   const puedeGestionarPedido = puedeGestionarPedidoMensualPosta(profile, postaId);
   const supabase = await createServerSupabaseClient();
   const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
+  const vistaCierreMes = cierre ? vistaCierreDesdeRegistro(cierre) : null;
   const puedeRegistrar = puedeGestionarPedido && !cierre;
+
+  const tabActiva = parseTab(qs?.tab);
 
   const [{ data: medicamentos }, { data: postaMeta }] = await Promise.all([
     supabase
@@ -180,16 +187,21 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
     id: pedidoGeneralVista.pedido?.id ?? null,
     estado: pedidoGeneralVista.pedido?.estado ?? null,
     enviado_en: pedidoGeneralVista.pedido?.enviado_en ?? null,
+    comentario_posta: pedidoGeneralVista.pedido?.comentario_posta ?? null,
   };
   const pedidoContraReceta = {
     id: pedidoContraRecetaVista.pedido?.id ?? null,
     estado: pedidoContraRecetaVista.pedido?.estado ?? null,
     enviado_en: pedidoContraRecetaVista.pedido?.enviado_en ?? null,
+    comentario_posta: pedidoContraRecetaVista.pedido?.comentario_posta ?? null,
   };
 
-  function buildPedidoRowData(
-    pedidoData: { id: string | null; estado: string | null; enviado_en: string | null }
-  ): Omit<PedidoRowData, "detalleRows"> {
+  function buildPedidoRowData(pedidoData: {
+    id: string | null;
+    estado: string | null;
+    enviado_en: string | null;
+    comentario_posta: string | null;
+  }): Omit<PedidoRowData, "detalleRows"> {
     const estadoRaw = pedidoData.estado;
     const estadoPedido =
       estadoRaw === "BORRADOR" ||
@@ -208,6 +220,7 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
       pedidoId: pedidoData.id,
       estadoPedido,
       enviadoEtiqueta,
+      comentarioPosta: pedidoData.comentario_posta,
     };
   }
 
@@ -343,8 +356,18 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
         basePath={basePath}
         anio={anio}
         mes={mes}
+        mesCerrado={Boolean(cierre)}
         queryExtra={queryExtra}
       />
+
+      {vistaCierreMes ? (
+        <CierreMesVistaAviso
+          postaId={postaId}
+          anio={anio}
+          mes={mes}
+          vista={vistaCierreMes}
+        />
+      ) : null}
 
       <PedidosTipoTabs
         postaId={postaId}
@@ -373,6 +396,7 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
               pedidoEnviadoHoy={pedidoContraRecetaVista.pedidoEnviadoHoy}
               pedidoEnProceso={pedidoContraRecetaVista.pedidoEnProceso}
               puedeEditar={puedeRegistrar}
+              comentarioPosta={pedidoContraRecetaDatos.comentarioPosta}
               lineas={lineasContraReceta}
             />
           ) : (
@@ -397,6 +421,7 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
             pedidoEnviadoHoy={pedidoGeneralVista.pedidoEnviadoHoy}
             pedidoEnProceso={pedidoGeneralVista.pedidoEnProceso}
             puedeEditar={puedeRegistrar}
+            comentarioPosta={pedidoGeneralDatos.comentarioPosta}
             lineas={lineasGeneral}
           />
         )}

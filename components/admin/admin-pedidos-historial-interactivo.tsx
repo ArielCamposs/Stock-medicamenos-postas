@@ -11,9 +11,8 @@ import { PedidoEstadoBadge } from "@/components/posta/pedido-estado-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { etiquetaPedidoEstado } from "@/lib/domain/pedido-estado-ui";
 import type { PedidoMensualDetallePayload } from "@/lib/posta/pedido-mensual-detalle";
-import { buildPedidosHistorialAdminXlsxBuffer } from "@/lib/reportes/pedidos-historial-admin-xlsx";
+import { buildPedidoMensualDetalleXlsxBuffer } from "@/lib/reportes/pedido-mensual-detalle-xlsx";
 import { cn } from "@/lib/utils";
 
 export type AdminPedidoTablaFila = {
@@ -46,20 +45,8 @@ function nombreArchivoPedido(fila: AdminPedidoTablaFila) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-  return `pedido-${fila.id.slice(0, 8)}-${y}-${m}-${day}.xlsx`;
-}
-
-function filaAXlsxPayload(f: AdminPedidoTablaFila) {
-  return {
-    postaNombre: f.postaNombre,
-    postaCodigo: f.postaCodigo,
-    mesTitulo: f.mesTitulo,
-    estado: etiquetaPedidoEstado(f.estado),
-    enviadoEtiqueta: f.enviadoEtiqueta,
-    pendienteBandeja: f.pendienteBandeja ? "Sí" : "No",
-    bandejaListo: f.bandejaListo ? "Sí" : "No",
-    pedidoId: f.id,
-  };
+  const tipo = fila.tipo === "CONTRA_RECETA" ? "contra-receta" : "general";
+  return `pedido-${tipo}-${fila.id.slice(0, 8)}-${y}-${m}-${day}.xlsx`;
 }
 
 function normalizaBusqueda(s: string) {
@@ -165,7 +152,24 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
     if (!seleccion) return;
     setExportando(true);
     try {
-      const buffer = await buildPedidosHistorialAdminXlsxBuffer([filaAXlsxPayload(seleccion)]);
+      let payload = detalle;
+      if (!payload || payload.pedidoId !== seleccion.id) {
+        const res = await fetch(`/api/pedidos/${seleccion.id}/detalle`, {
+          credentials: "same-origin",
+        });
+        const body = (await res.json()) as PedidoMensualDetallePayload | { error?: string };
+        if (!res.ok) {
+          throw new Error(
+            typeof body === "object" && body && "error" in body && typeof body.error === "string"
+              ? body.error
+              : "No se pudo cargar el detalle para exportar."
+          );
+        }
+        payload = body as PedidoMensualDetallePayload;
+        cacheDetalleRef.current.set(seleccion.id, payload);
+        setDetalle(payload);
+      }
+      const buffer = await buildPedidoMensualDetalleXlsxBuffer(payload);
       const blob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
@@ -175,10 +179,13 @@ export function AdminPedidosHistorialInteractivo({ filas, puedeGestionarBandeja 
       a.download = nombreArchivoPedido(seleccion);
       a.click();
       URL.revokeObjectURL(url);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "No se pudo generar el Excel.";
+      window.alert(msg);
     } finally {
       setExportando(false);
     }
-  }, [seleccion]);
+  }, [seleccion, detalle]);
 
   return (
     <>

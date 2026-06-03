@@ -1,4 +1,8 @@
-export type RolUsuarioDb = "ADMIN_GENERAL" | "POSTA_MANAGER" | "READ_ONLY";
+export type RolUsuarioDb =
+  | "ADMIN_GENERAL"
+  | "BODEGA_FARMACIA"
+  | "POSTA_MANAGER"
+  | "READ_ONLY";
 
 export type PerfilUsuarioRow = {
   id: string;

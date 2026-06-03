@@ -15,7 +15,11 @@ import {
   requirePerfilUsuario,
 } from "@/lib/auth/session";
 import { anioMesActual } from "@/lib/domain/fecha-mes";
-import { obtenerCierreMensualPosta } from "@/lib/posta/cierre-mensual";
+import { CierreMesVistaAviso } from "@/components/posta/cierre-mes-vista-aviso";
+import {
+  obtenerCierreMensualPosta,
+  vistaCierreDesdeRegistro,
+} from "@/lib/posta/cierre-mensual";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +64,7 @@ export default async function PostaStockAvisPage({ params, searchParams }: PageP
   const puedeRegistrarPorRol = puedeRegistrarStockYAvisPosta(profile, postaId);
   const supabase = await createServerSupabaseClient();
   const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
+  const vistaCierreMes = cierre ? vistaCierreDesdeRegistro(cierre) : null;
   const puedeRegistrar = puedeRegistrarPorRol && !cierre;
 
   const [{ data: medicamentos }, { data: avisRows }] = await Promise.all([
@@ -130,7 +135,21 @@ export default async function PostaStockAvisPage({ params, searchParams }: PageP
         }
       />
 
-      <PostaMesToolbar basePath={basePath} anio={anio} mes={mes} />
+      <PostaMesToolbar
+        basePath={basePath}
+        anio={anio}
+        mes={mes}
+        mesCerrado={Boolean(cierre)}
+      />
+
+      {vistaCierreMes ? (
+        <CierreMesVistaAviso
+          postaId={postaId}
+          anio={anio}
+          mes={mes}
+          vista={vistaCierreMes}
+        />
+      ) : null}
 
       <p className="text-center font-heading text-lg font-semibold capitalize text-foreground">
         {tituloMesChile(anio, mes)}

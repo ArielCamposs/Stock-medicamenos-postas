@@ -17,11 +17,20 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import {
+  puedeGestionarPedidoMensualPosta,
   puedeRegistrarStockYAvisPosta,
   requirePerfilUsuario,
 } from "@/lib/auth/session";
 import { anioMesActual, fechaIngresoParaMesMovimiento } from "@/lib/domain/fecha-mes";
-import { obtenerCierreMensualPosta } from "@/lib/posta/cierre-mensual";
+import { CierreMesVistaAviso } from "@/components/posta/cierre-mes-vista-aviso";
+import {
+  obtenerCierreMensualPosta,
+  vistaCierreDesdeRegistro,
+} from "@/lib/posta/cierre-mensual";
+import {
+  cargarCantidadesPedidoActivoParaIngreso,
+  obtenerPedidoDespachadoActivoParaIngreso,
+} from "@/lib/posta/pedido-despachado-ingreso";
 import { fechasConIngresoLoteEnMes } from "@/lib/posta/reglas-repeticion-dia";
 import { snapshotLedgerMesPosta } from "@/lib/posta/snapshot-ledger-mes-posta";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -60,11 +69,18 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
 
   const { profile } = await requirePerfilUsuario();
   const puedeRegistrarPorRol = puedeRegistrarStockYAvisPosta(profile, postaId);
+  const puedeIngresarPedidoDespachado = puedeGestionarPedidoMensualPosta(profile, postaId);
   const supabase = await createServerSupabaseClient();
   const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
+  const vistaCierreMes = cierre ? vistaCierreDesdeRegistro(cierre) : null;
   const puedeRegistrar = puedeRegistrarPorRol && !cierre;
 
-  const [{ data: medicamentos }, { data: lotesRows }, { data: postaMeta }, { data: pedidosGeneralRows }, { data: ingresadoEstesMes }] = await Promise.all([
+  const [
+    { data: medicamentos },
+    { data: lotesRows },
+    { data: postaMeta },
+    { data: ingresadoEstesMes },
+  ] = await Promise.all([
     supabase
       .from("medicamentos")
       .select(
@@ -93,15 +109,6 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
       .order("created_at", { ascending: false })
       .limit(30),
     supabase.from("postas").select("nombre, codigo").eq("id", postaId).maybeSingle(),
-    supabase
-      .from("pedidos_mensuales")
-      .select("id")
-      .eq("posta_id", postaId)
-      .eq("anio", anio)
-      .eq("mes", mes)
-      .eq("tipo", "GENERAL")
-      .in("estado", ["ENVIADO", "APROBADO", "OBSERVADO", "DESPACHADO", "RECIBIDO"]),
-    // Total ingresado por medicamento en este mes (no anulado).
     supabase
       .from("ingresos_stock_mes")
       .select("medicamento_id, cantidad")
@@ -139,37 +146,50 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
       }
     }
   }
-  const totalIngresadoMes = Object.values(ingresadoPorMed).reduce((a, b) => a + b, 0);
+  const totalIngresadoMesTodos = Object.values(ingresadoPorMed).reduce((a, b) => a + b, 0);
 
-  // Sumar cantidades pedidas en todos los pedidos generales enviados del mes.
-  const pedidoIds = (pedidosGeneralRows ?? [])
-    .map((row) => (row as { id?: unknown }).id)
-    .filter((id): id is string => typeof id === "string");
+  const pedidoDespachadoActivo = await obtenerPedidoDespachadoActivoParaIngreso(
+    supabase,
+    postaId,
+    anio,
+    mes
+  );
 
-  const cantidadPedidaPorMed: Record<string, number> = {};
-  if (pedidoIds.length > 0) {
-    const { data: detalleRows } = await supabase
-      .from("detalle_pedido_mensual")
-      .select("medicamento_id, cantidad_final")
-      .in("pedido_id", pedidoIds);
-    if (detalleRows && Array.isArray(detalleRows)) {
-      for (const row of detalleRows) {
-        const r = row as Record<string, unknown>;
-        if (typeof r.medicamento_id === "string") {
-          cantidadPedidaPorMed[r.medicamento_id] =
-            (cantidadPedidaPorMed[r.medicamento_id] ?? 0) + toInt(r.cantidad_final);
-        }
-      }
-    }
+  let cantidadPedidaPorMed: Record<string, number> = {};
+  let cantidadIngresadaPedidoPorMed: Record<string, number> = {};
+  if (pedidoDespachadoActivo) {
+    const cant = await cargarCantidadesPedidoActivoParaIngreso(
+      supabase,
+      postaId,
+      anio,
+      mes,
+      pedidoDespachadoActivo
+    );
+    cantidadPedidaPorMed = cant.cantidadPedidaPorMed;
+    cantidadIngresadaPedidoPorMed = cant.cantidadIngresadaPedidoPorMed;
   }
+
+  const hayPedidoMes =
+    pedidoDespachadoActivo !== null && puedeIngresarPedidoDespachado;
+  const pedidoDespachadoParaForm =
+    pedidoDespachadoActivo && puedeIngresarPedidoDespachado
+      ? pedidoDespachadoActivo
+      : null;
+
+  const totalIngresadoMes = pedidoDespachadoParaForm
+    ? Object.values(cantidadIngresadaPedidoPorMed).reduce((a, b) => a + b, 0)
+    : totalIngresadoMesTodos;
 
   const meds =
     medicamentos?.map((m) => {
       const id = m.id as string;
-      const pedida = cantidadPedidaPorMed[id] ?? 0;
-      const yaIngresada = ingresadoPorMed[id] ?? 0;
-      // La cantidad sugerida es lo que queda pendiente de recibir del pedido.
-      const cantidadSugerida = Math.max(0, pedida - yaIngresada);
+      const pedida = pedidoDespachadoParaForm ? (cantidadPedidaPorMed[id] ?? 0) : 0;
+      const yaIngresadaPedido = cantidadIngresadaPedidoPorMed[id] ?? 0;
+      const yaIngresadaMes = ingresadoPorMed[id] ?? 0;
+      const cantidadYaIngresada = pedidoDespachadoParaForm
+        ? yaIngresadaPedido
+        : yaIngresadaMes;
+      const cantidadSugerida = Math.max(0, pedida - cantidadYaIngresada);
       return {
         id,
         nombre: m.nombre as string,
@@ -177,7 +197,7 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
         codigo_avis: (m.codigo_avis as string | null) ?? null,
         unidad_medida: String(m.unidad_medida ?? ""),
         cantidadPedida: pedida,
-        cantidadYaIngresada: yaIngresada,
+        cantidadYaIngresada,
         cantidadSugerida,
       };
     }) ?? [];
@@ -274,7 +294,29 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
         }
       />
 
-      <PostaMesToolbar basePath={basePath} anio={anio} mes={mes} />
+      <PostaMesToolbar
+        basePath={basePath}
+        anio={anio}
+        mes={mes}
+        mesCerrado={Boolean(cierre)}
+      />
+
+      {vistaCierreMes ? (
+        <CierreMesVistaAviso
+          postaId={postaId}
+          anio={anio}
+          mes={mes}
+          vista={vistaCierreMes}
+        />
+      ) : null}
+
+      {pedidoDespachadoActivo && !puedeIngresarPedidoDespachado ? (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600/30 dark:bg-amber-950/25 dark:text-amber-100">
+          Hay un pedido{" "}
+          <strong>{pedidoDespachadoActivo.etiquetaTipo}</strong> despachado pendiente de ingreso.
+          Solo el <strong>encargado de la posta</strong> puede registrarlo en esta pantalla.
+        </div>
+      ) : null}
 
       {puedeRegistrar ? (
         <Card className="border-primary/20 shadow-sm">
@@ -297,7 +339,8 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
               medicamentos={meds}
               mesContableYm={mesContableYm}
               ledgerPorMedicamento={ledgerPorMedicamento}
-              hayPedidoMes={pedidoIds.length > 0}
+              hayPedidoMes={hayPedidoMes}
+              pedidoDespachadoActivo={pedidoDespachadoParaForm}
               totalIngresadoMes={totalIngresadoMes}
               fechaApunteIngreso={fechaApunteIngreso}
               ingresoBloqueadoMismoDia={ingresoBloqueadoMismoDia}

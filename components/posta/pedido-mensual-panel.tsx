@@ -26,8 +26,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/providers/toast-provider";
+import {
+  CategoriaGrupoCabeceraContenido,
+  CategoriasColapsarTodasBar,
+  useCategoriasColapsables,
+} from "@/components/medicamentos/categoria-grupo-colapsable";
 import { PedidoEstadoBadge } from "@/components/posta/pedido-estado-badge";
-import { StockNivelLeyenda } from "@/components/posta/stock-nivel-leyenda";
+import { StockNivelFiltroBar } from "@/components/posta/stock-nivel-filtro-bar";
 import {
   CATEGORIAS_AGRUPACION_UI,
   categoriaAgrupacionListado,
@@ -35,7 +40,11 @@ import {
   type MedicamentoCategoria,
 } from "@/lib/domain/medicamento-categoria";
 import type { TipoPedido } from "@/app/actions/pedido-mensual";
-import { nivelStockListadoVisual } from "@/lib/posta/admin-stock-alerta-postas";
+import {
+  lineaCoincideFiltroStock,
+  nivelAlertaStock,
+  type NivelStockFiltro,
+} from "@/lib/posta/admin-stock-alerta-postas";
 import { cn } from "@/lib/utils";
 
 export type PedidoMensualLineaCliente = {
@@ -77,6 +86,7 @@ type Props = {
   pedidoEnviadoHoy: boolean;
   pedidoEnProceso: boolean;
   puedeEditar: boolean;
+  comentarioPosta: string | null;
   lineas: PedidoMensualLineaCliente[];
 };
 
@@ -119,6 +129,60 @@ function lineaCoincideBusqueda(m: PedidoMensualLineaCliente, q: string) {
   return nombre.includes(q) || ci.includes(q);
 }
 
+function lineaVisibleEnListado(
+  m: PedidoMensualLineaCliente,
+  queryBusqueda: string,
+  filtroStock: NivelStockFiltro | null
+) {
+  return (
+    lineaCoincideBusqueda(m, queryBusqueda) &&
+    lineaCoincideFiltroStock(
+      m.disponible,
+      m.stock_critico,
+      m.stock_recomendado,
+      filtroStock
+    )
+  );
+}
+
+function textoCondicionesFiltroPedido(
+  busqueda: string,
+  filtroStock: NivelStockFiltro | null
+): string {
+  const partes: string[] = [];
+  const q = busqueda.trim();
+  if (q) partes.push(`la búsqueda «${q}»`);
+  if (filtroStock === "holgado") partes.push("stock holgado");
+  if (filtroStock === "cerca") partes.push("cerca del crítico");
+  if (filtroStock === "critico") partes.push("crítico o bajo");
+  if (partes.length === 0) return "los filtros aplicados";
+  if (partes.length === 1) return partes[0];
+  return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+}
+
+function PedidoListadoSinResultadosFiltro({
+  condiciones,
+  onLimpiarFiltros,
+}: {
+  condiciones: string;
+  onLimpiarFiltros: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center">
+      <p className="text-sm font-semibold text-foreground">
+        No hay medicamentos con estas condiciones
+      </p>
+      <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
+        No encontramos ningún medicamento que coincida con {condiciones}. Puedes quitar los
+        filtros, elegir otro nivel de stock o buscar con otro término.
+      </p>
+      <Button type="button" variant="outline" size="sm" onClick={onLimpiarFiltros}>
+        Quitar filtros
+      </Button>
+    </div>
+  );
+}
+
 /** Campo editable de cantidad a pedir: fondo blanco fijo para destacar sobre la fila coloreada. */
 function claseInputCantidadPedido(tamano: "tabla" | "mobile") {
   return cn(
@@ -132,20 +196,25 @@ function clasesFilaStock(
   stock_critico: number,
   stock_recomendado: number
 ) {
-  const tono = nivelStockListadoVisual(disponible, stock_critico, stock_recomendado);
+  const nivel = nivelAlertaStock(disponible, stock_critico, stock_recomendado);
+  if (nivel === "critico") {
+    return {
+      filaClass:
+        "bg-destructive/10 dark:bg-destructive/15 border-l-4 border-l-destructive",
+      claseDisponible: "text-destructive",
+    };
+  }
+  if (nivel === "cerca") {
+    return {
+      filaClass:
+        "bg-amber-400/14 dark:bg-amber-500/12 border-l-4 border-l-amber-500",
+      claseDisponible: "text-amber-950 dark:text-amber-100",
+    };
+  }
   return {
     filaClass:
-      tono === "alerta"
-        ? "bg-destructive/10 dark:bg-destructive/15 border-l-4 border-l-destructive"
-        : tono === "regular"
-          ? "bg-amber-400/14 dark:bg-amber-500/12 border-l-4 border-l-amber-500"
-          : "bg-emerald-500/10 dark:bg-emerald-500/10 border-l-4 border-l-emerald-500",
-    claseDisponible:
-      tono === "alerta"
-        ? "text-destructive"
-        : tono === "regular"
-          ? "text-amber-950 dark:text-amber-100"
-          : "text-emerald-900 dark:text-emerald-100",
+      "bg-emerald-500/10 dark:bg-emerald-500/10 border-l-4 border-l-emerald-500",
+    claseDisponible: "text-emerald-900 dark:text-emerald-100",
   };
 }
 
@@ -226,6 +295,7 @@ export function PedidoMensualPanel({
   pedidoEnviadoHoy,
   pedidoEnProceso,
   puedeEditar,
+  comentarioPosta,
   lineas,
 }: Props) {
   const router = useRouter();
@@ -244,10 +314,21 @@ export function PedidoMensualPanel({
   const submitEnviarRef = useRef<HTMLButtonElement>(null);
   const [confirmarAbierto, setConfirmarAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  const [filtroStock, setFiltroStock] = useState<NivelStockFiltro | null>(null);
   const queryBusqueda = useMemo(() => normalizaBusqueda(busqueda), [busqueda]);
-  const nCoincidenciasBusqueda = useMemo(
-    () => lineas.filter((l) => lineaCoincideBusqueda(l, queryBusqueda)).length,
-    [lineas, queryBusqueda]
+  const hayFiltroListado = queryBusqueda.length > 0 || filtroStock !== null;
+  const nCoincidenciasVisibles = useMemo(
+    () => lineas.filter((l) => lineaVisibleEnListado(l, queryBusqueda, filtroStock)).length,
+    [lineas, queryBusqueda, filtroStock]
+  );
+  const colapsables = useCategoriasColapsables();
+  const forzarExpandidas = hayFiltroListado;
+  const categoriasVisibles = useMemo(
+    () =>
+      CATEGORIAS_AGRUPACION_UI.filter((cat) =>
+        lineas.some((l) => categoriaAgrupacionListado(l.categoria) === cat)
+      ),
+    [lineas]
   );
   const [resumenEnvio, setResumenEnvio] = useState<{
     conPedido: LineaResumenEnvio[];
@@ -281,6 +362,7 @@ export function PedidoMensualPanel({
     (!esFormularioNuevo && !esEditableEstado);
   const puedePdf = Boolean(pedidoId) && estado !== "BORRADOR" && estado !== null;
   const esReenvioObservado = estado === "OBSERVADO";
+  const despachado = estado === "DESPACHADO";
 
   function abrirConfirmacionEnvio() {
     const form = formRef.current;
@@ -304,6 +386,13 @@ export function PedidoMensualPanel({
 
   const resumen = resumenEnvio;
   const pedidoVacio = resumen !== null && resumen.nMedicamentos === 0;
+  const sinResultadosFiltro = hayFiltroListado && nCoincidenciasVisibles === 0;
+  const condicionesFiltroTexto = textoCondicionesFiltroPedido(busqueda, filtroStock);
+
+  function limpiarFiltrosListado() {
+    setBusqueda("");
+    setFiltroStock(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -326,7 +415,11 @@ export function PedidoMensualPanel({
               </span>
             )}
           </div>
-          <StockNivelLeyenda className="mt-3" compact />
+          <StockNivelFiltroBar
+            className="mt-3"
+            value={filtroStock}
+            onChange={setFiltroStock}
+          />
         </CardHeader>
         <CardContent className="pt-4">
           {pedidoEnProceso ? (
@@ -365,6 +458,23 @@ export function PedidoMensualPanel({
             <div className="mb-4 rounded-md border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-600/30 dark:bg-emerald-950/20 dark:text-emerald-100">
               El último pedido fue recibido. Puedes enviar un pedido extra cuando lo necesites; las cantidades
               se calculan según tu stock actual.
+            </div>
+          ) : null}
+
+          {despachado ? (
+            <div className="mb-4 rounded-md border border-violet-500/40 bg-violet-50 px-4 py-3 text-sm text-violet-950 dark:border-violet-600/30 dark:bg-violet-950/25 dark:text-violet-100">
+              <p className="font-medium mb-1">Pedido despachado por bodega</p>
+              <p className="text-violet-900/90 dark:text-violet-100/90">
+                Registra lo recibido en{" "}
+                <Link
+                  href={`/postas/${postaId}/ingresos?ym=${ymQuery}`}
+                  className="font-medium underline"
+                >
+                  Entradas de stock
+                </Link>
+                , igual que con el pedido general. Si hay más de un despacho en el mes, ingresa primero el
+                que llegó antes.
+              </p>
             </div>
           ) : null}
 
@@ -413,48 +523,67 @@ export function PedidoMensualPanel({
                     disabled={soloLectura}
                   />
                 </div>
-                {queryBusqueda ? (
-                  <p className="pb-2 text-xs text-muted-foreground">
-                    {nCoincidenciasBusqueda === 0 ? (
-                      <>Sin coincidencias en este pedido.</>
-                    ) : (
-                      <>
-                        <span className="font-medium text-foreground tabular-nums">
-                          {nCoincidenciasBusqueda}
-                        </span>{" "}
-                        de {lineas.length}{" "}
-                        {lineas.length === 1 ? "medicamento" : "medicamentos"}
-                      </>
-                    )}
-                  </p>
-                ) : null}
               </div>
 
+              {hayFiltroListado && nCoincidenciasVisibles > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground tabular-nums">
+                    {nCoincidenciasVisibles}
+                  </span>{" "}
+                  de {lineas.length}{" "}
+                  {lineas.length === 1 ? "medicamento" : "medicamentos"}
+                  {filtroStock && queryBusqueda ? " (búsqueda y stock)" : null}
+                </p>
+              ) : null}
+
+              <CategoriasColapsarTodasBar
+                categorias={categoriasVisibles}
+                onExpandirTodas={colapsables.expandirTodas}
+                onColapsarTodas={colapsables.colapsarTodas}
+                className="px-0.5"
+              />
+
               <div className="space-y-4 md:hidden">
-                {CATEGORIAS_AGRUPACION_UI.map((cat) => {
+                {sinResultadosFiltro ? (
+                  <div className="rounded-lg border border-border bg-muted/15">
+                    <PedidoListadoSinResultadosFiltro
+                      condiciones={condicionesFiltroTexto}
+                      onLimpiarFiltros={limpiarFiltrosListado}
+                    />
+                  </div>
+                ) : null}
+                {!sinResultadosFiltro
+                  ? CATEGORIAS_AGRUPACION_UI.map((cat) => {
                   const lineasCat = lineas.filter(
                     (l) => categoriaAgrupacionListado(l.categoria) === cat
                   );
                   const lineasCatVisibles = lineasCat.filter((l) =>
-                    lineaCoincideBusqueda(l, queryBusqueda)
+                    lineaVisibleEnListado(l, queryBusqueda, filtroStock)
                   );
                   if (lineasCatVisibles.length === 0) return null;
+                  const expandida = colapsables.estaExpandida(cat, forzarExpandidas);
                   return (
                     <section key={`m-${cat}`} className="space-y-2">
-                      <h3 className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/70 px-3 py-2">
-                        <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
-                        <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
-                          {etiquetaMedicamentoCategoria[cat]}
-                        </span>
-                      </h3>
+                      <div className="rounded-md border border-border/60 bg-muted/70 px-2 py-1">
+                        <CategoriaGrupoCabeceraContenido
+                          etiqueta={etiquetaMedicamentoCategoria[cat]}
+                          expandida={expandida}
+                          onToggle={() => colapsables.toggle(cat)}
+                          cantidad={lineasCatVisibles.length}
+                          className="px-1 py-1.5"
+                        />
+                      </div>
+                      {expandida ? (
                       <div className="space-y-2">
                         {lineasCat.map((m) => (
                           <div
                             key={m.medicamentoId}
                             className={cn(
-                              !lineaCoincideBusqueda(m, queryBusqueda) && "hidden"
+                              !lineaVisibleEnListado(m, queryBusqueda, filtroStock) && "hidden"
                             )}
-                            aria-hidden={!lineaCoincideBusqueda(m, queryBusqueda)}
+                            aria-hidden={
+                              !lineaVisibleEnListado(m, queryBusqueda, filtroStock)
+                            }
                           >
                             <PedidoLineaMobileCard
                               m={m}
@@ -464,9 +593,11 @@ export function PedidoMensualPanel({
                           </div>
                         ))}
                       </div>
+                      ) : null}
                     </section>
                   );
-                })}
+                  })
+                  : null}
               </div>
 
               <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
@@ -485,30 +616,48 @@ export function PedidoMensualPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    {(() => {
+                    {sinResultadosFiltro ? (
+                      <tr>
+                        <td colSpan={7} className="bg-muted/10">
+                          <PedidoListadoSinResultadosFiltro
+                            condiciones={condicionesFiltroTexto}
+                            onLimpiarFiltros={limpiarFiltrosListado}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                    {!sinResultadosFiltro
+                      ? (() => {
                       return CATEGORIAS_AGRUPACION_UI.map((cat) => {
                         const lineasCat = lineas.filter(
                           (l) =>
                             categoriaAgrupacionListado(l.categoria) === cat &&
-                            lineaCoincideBusqueda(l, queryBusqueda)
+                            lineaVisibleEnListado(l, queryBusqueda, filtroStock)
                         );
                         if (lineasCat.length === 0) return null;
+                        const expandida = colapsables.estaExpandida(cat, forzarExpandidas);
                         return (
                           <Fragment key={cat}>
                             <tr className="border-y-2 border-border/60 bg-muted/60">
-                              <td colSpan={7} className="px-3 py-2.5">
-                                <div className="flex items-center gap-2">
-                                  <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary/50" aria-hidden />
-                                  <span className="text-[11px] font-bold uppercase tracking-widest text-foreground/75">
-                                    {etiquetaMedicamentoCategoria[cat]}
-                                  </span>
-                                </div>
+                              <td colSpan={7} className="px-2 py-1">
+                                <CategoriaGrupoCabeceraContenido
+                                  etiqueta={etiquetaMedicamentoCategoria[cat]}
+                                  expandida={expandida}
+                                  onToggle={() => colapsables.toggle(cat)}
+                                  cantidad={lineasCat.length}
+                                  className="px-1 py-1.5"
+                                />
                               </td>
                             </tr>
-                            {lineas
+                            {expandida
+                              ? lineas
                               .filter((l) => categoriaAgrupacionListado(l.categoria) === cat)
                               .map((m) => {
-                              const visible = lineaCoincideBusqueda(m, queryBusqueda);
+                              const visible = lineaVisibleEnListado(
+                                m,
+                                queryBusqueda,
+                                filtroStock
+                              );
                               const { filaClass, claseDisponible } = clasesFilaStock(
                                 m.disponible,
                                 m.stock_critico,
@@ -577,11 +726,13 @@ export function PedidoMensualPanel({
                                   </td>
                                 </tr>
                               );
-                            })}
+                            })
+                              : null}
                           </Fragment>
                         );
                       });
-                    })()}
+                    })()
+                      : null}
                   </tbody>
                 </table>
               </div>

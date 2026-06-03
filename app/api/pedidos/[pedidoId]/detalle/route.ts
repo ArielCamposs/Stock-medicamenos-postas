@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { requirePerfilUsuario, tieneAccesoGlobalAdmin } from "@/lib/auth/session";
+import {
+  esBodegaFarmacia,
+  requirePerfilUsuario,
+  tieneAccesoGlobalAdmin,
+} from "@/lib/auth/session";
 import { cargarDetallePedidoMensual } from "@/lib/posta/pedido-mensual-detalle";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -19,7 +23,7 @@ export async function GET(_request: Request, ctx: RouteCtx) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
-  if (!tieneAccesoGlobalAdmin(profile)) {
+  if (!tieneAccesoGlobalAdmin(profile) && !esBodegaFarmacia(profile)) {
     return NextResponse.json({ error: "No autorizado." }, { status: 403 });
   }
 

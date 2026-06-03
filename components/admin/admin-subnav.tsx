@@ -18,6 +18,7 @@ export function AdminSubnav({ puedeCatalogo }: { puedeCatalogo: boolean }) {
   ];
   if (puedeCatalogo) {
     links.push(
+      { href: "/admin/usuarios", label: "Usuarios" },
       { href: "/admin/postas", label: "Postas" },
       { href: "/admin/medicamentos", label: "Medicamentos" },
       { href: "/admin/insumos", label: "Insumos" }

@@ -28,6 +28,7 @@ export function parsePerfilOfflineCookieValue(raw: string): PerfilUsuarioRow | n
     const rol = parsed.rol;
     if (
       rol !== "ADMIN_GENERAL" &&
+      rol !== "BODEGA_FARMACIA" &&
       rol !== "POSTA_MANAGER" &&
       rol !== "READ_ONLY"
     ) {

@@ -55,14 +55,6 @@ export function AprobarPedidoButton({
               {pending ? "…" : "Aprobar"}
             </Button>
           </>
-        ) : estado === "APROBADO" ? (
-          <Button type="submit" name="estado" value="DESPACHADO" size="sm" variant="default" disabled={pending}>
-            Despachar
-          </Button>
-        ) : estado === "DESPACHADO" ? (
-          <Button type="submit" name="estado" value="RECIBIDO" size="sm" variant="default" disabled={pending}>
-            Recibido
-          </Button>
         ) : null}
       </div>
     </form>

@@ -35,6 +35,9 @@ export function MedicamentoCreateForm({
       <div className="space-y-2 sm:col-span-2">
         <Label htmlFor="med-nuevo-nombre">Nombre</Label>
         <Input id="med-nuevo-nombre" name="nombre" defaultValue={state.values?.nombre} required />
+        <p className="text-[11px] text-muted-foreground">
+          Debe ser único en el catálogo (no se repite aunque cambien mayúsculas o espacios).
+        </p>
       </div>
 
       <div className="space-y-2 sm:col-span-2">

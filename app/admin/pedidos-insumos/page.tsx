@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { PedidosInsumosAdminPanel, type PedidoInsumosAdminRow } from "@/components/admin/pedidos-insumos-admin-panel";
+import { RscAutoRefresh } from "@/components/shared/rsc-auto-refresh";
 import { PostaPageHeader } from "@/components/posta/posta-page-header";
 import { requirePerfilUsuario, tieneAccesoGlobalAdmin, esAdminGeneral } from "@/lib/auth/session";
 import { etiquetaInstanteChile24h } from "@/lib/domain/fecha-mes";
@@ -136,6 +137,7 @@ export default async function AdminPedidosInsumosPage() {
 
   return (
     <div className="space-y-6">
+      <RscAutoRefresh />
       <PostaPageHeader
         title="Pedidos de insumos"
         description="Revisa y gestiona los pedidos de insumos enviados por las postas."

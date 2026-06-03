@@ -8,8 +8,10 @@ export type PedidoMensualCabecera = {
   id: string;
   estado: string;
   enviado_en: string | null;
+  despachado_en: string | null;
   tipo: TipoPedido | null;
   fecha_creacion: string | null;
+  comentario_posta: string | null;
 };
 
 export type PedidoMensualVistaTipo = {
@@ -39,7 +41,15 @@ function parseFila(row: Record<string, unknown>): PedidoMensualCabecera | null {
     row.fecha_creacion === null || typeof row.fecha_creacion === "string"
       ? (row.fecha_creacion as string | null)
       : null;
-  return { id: row.id, estado, enviado_en, tipo, fecha_creacion };
+  const comentario_posta =
+    row.comentario_posta === null || typeof row.comentario_posta === "string"
+      ? (row.comentario_posta as string | null)
+      : null;
+  const despachado_en =
+    row.despachado_en === null || typeof row.despachado_en === "string"
+      ? (row.despachado_en as string | null)
+      : null;
+  return { id: row.id, estado, enviado_en, despachado_en, tipo, fecha_creacion, comentario_posta };
 }
 
 const EN_PROCESO = new Set(["ENVIADO", "APROBADO", "DESPACHADO"]);
@@ -64,6 +74,13 @@ function resolverVistaPedidoTipo(
       return { pedido: p, pedidoEnProceso: false };
     }
   }
+  const despachados = byRecency.filter((p) => p.estado === "DESPACHADO");
+  if (despachados.length > 0) {
+    const primero = [...despachados].sort((a, b) =>
+      (a.despachado_en ?? "9999").localeCompare(b.despachado_en ?? "9999")
+    )[0];
+    return { pedido: primero, pedidoEnProceso: true };
+  }
   for (const p of byRecency) {
     if (EN_PROCESO.has(p.estado)) {
       return { pedido: p, pedidoEnProceso: true };
@@ -87,7 +104,7 @@ export async function cargarPedidosMensualesMes(
 ): Promise<PedidosMensualesMes> {
   const { data, error } = await supabase
     .from("pedidos_mensuales")
-    .select("id, estado, enviado_en, tipo, fecha_creacion")
+    .select("id, estado, enviado_en, despachado_en, tipo, fecha_creacion, comentario_posta")
     .eq("posta_id", postaId)
     .eq("anio", anio)
     .eq("mes", mes)

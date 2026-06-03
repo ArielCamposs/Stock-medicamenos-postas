@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fechaInputHoy } from "@/lib/domain/fecha-mes";
+import type { PedidoDespachadoActivoIngreso } from "@/lib/posta/pedido-despachado-ingreso";
 import { cn } from "@/lib/utils";
 
 export type MedIngresoLoteRow = {
@@ -55,6 +56,7 @@ export function IngresoStockLoteForm({
   mesContableYm,
   ledgerPorMedicamento,
   hayPedidoMes,
+  pedidoDespachadoActivo,
   totalIngresadoMes,
   fechaApunteIngreso,
   ingresoBloqueadoMismoDia,
@@ -63,13 +65,12 @@ export function IngresoStockLoteForm({
   medicamentos: MedIngresoLoteRow[];
   mesContableYm: string;
   ledgerPorMedicamento: Record<string, LedgerIngresoFila>;
-  /** True si hay un pedido mensual enviado para este mes; habilita columna y filtro. */
+  /** True si hay un pedido despachado pendiente de ingresar este mes. */
   hayPedidoMes: boolean;
+  pedidoDespachadoActivo: PedidoDespachadoActivoIngreso | null;
   /** Suma total de unidades ya ingresadas este mes (para mostrar aviso). */
   totalIngresadoMes: number;
-  /** Fecha que se usará al guardar (día de hoy si el mes es el actual). */
   fechaApunteIngreso: string;
-  /** Ya hay una recepción registrada con esa fecha. */
   ingresoBloqueadoMismoDia: boolean;
 }) {
   const router = useRouter();
@@ -146,7 +147,9 @@ export function IngresoStockLoteForm({
   const fechaApunte = fechaApunteIngreso;
 
   const [busqueda, setBusqueda] = useState("");
-  const [soloPedido, setSoloPedido] = useState(false);
+  const [soloPedido, setSoloPedido] = useState(
+    () => pedidoDespachadoActivo?.tipo === "CONTRA_RECETA"
+  );
   const query = useMemo(() => normalizaBusqueda(busqueda), [busqueda]);
   const filtrados = useMemo(
     () => medicamentos.filter((m) => medCoincide(m, query, soloPedido)),
@@ -178,6 +181,9 @@ export function IngresoStockLoteForm({
       <input type="hidden" name="medicamento_ids_json" value={idsJson} />
       <input type="hidden" name="fecha" value={fechaApunte} />
       <input type="hidden" name="mes_movimiento" value={mesContableYm} />
+      {pedidoDespachadoActivo ? (
+        <input type="hidden" name="pedido_despachado_id" value={pedidoDespachadoActivo.pedidoId} />
+      ) : null}
 
       {state.error ? (
         <p
@@ -251,6 +257,19 @@ export function IngresoStockLoteForm({
       ) : null}
 
       {/* Resumen en tiempo real */}
+      {pedidoDespachadoActivo ? (
+        <div className="flex items-start gap-2.5 rounded-lg border border-violet-500/40 bg-violet-50 px-3 py-2.5 text-xs text-violet-950 dark:border-violet-600/30 dark:bg-violet-950/25 dark:text-violet-100">
+          <span className="mt-0.5 text-base leading-none">📦</span>
+          <div>
+            <strong>
+              Pedido {pedidoDespachadoActivo.etiquetaTipo} despachado
+            </strong>{" "}
+            ({pedidoDespachadoActivo.despachadoEtiqueta}). Registra aquí lo que llegó, igual que con el
+            pedido general. Si también hay otro despacho después, lo verás cuando termines este.
+          </div>
+        </div>
+      ) : null}
+
       {ingresoBloqueadoMismoDia ? (
         <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300">
           <span className="mt-0.5 text-base leading-none">📅</span>

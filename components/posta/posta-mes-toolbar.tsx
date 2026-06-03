@@ -13,6 +13,8 @@ type Props = {
   basePath: string;
   anio: number;
   mes: number;
+  /** Si el mes tiene un cierre vigente (no reabierto). */
+  mesCerrado?: boolean;
   /** Parámetros extra en los links de mes (ej. from=admin). */
   queryExtra?: Record<string, string>;
   className?: string;
@@ -32,6 +34,7 @@ export function PostaMesToolbar({
   basePath,
   anio,
   mes,
+  mesCerrado = false,
   queryExtra,
   className,
 }: Props) {
@@ -69,6 +72,11 @@ export function PostaMesToolbar({
               <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 max-sm:sr-only">
                 <span className="size-1.5 rounded-full bg-emerald-500" />
                 En curso
+              </span>
+            ) : mesCerrado ? (
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-violet-500/10 border border-violet-500/25 px-2 py-0.5 text-[10px] font-bold text-violet-800 dark:text-violet-300 max-sm:sr-only">
+                <span className="size-1.5 rounded-full bg-violet-500" />
+                Cerrado
               </span>
             ) : esMesPasado ? (
               <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted border border-border px-2 py-0.5 text-[10px] font-bold text-muted-foreground max-sm:sr-only">
