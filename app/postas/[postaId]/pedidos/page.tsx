@@ -337,12 +337,6 @@ export default async function PostaPedidosPage({ params, searchParams }: PagePro
             ) : (
               "Pedido general y contra receta por separado; varios envíos al mes, uno por día de cada tipo."
             )}
-            {volverBandejaAdmin ? (
-              <span className="mt-2 block rounded-md border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-950 dark:text-sky-50">
-                Vista desde supervisión: este formulario es el pedido mensual de la posta indicada arriba,
-                no un pedido global.
-              </span>
-            ) : null}
             {pedidosMes.error ? (
               <span className="mt-2 block text-destructive" role="alert">
                 No se pudieron cargar los pedidos del mes: {pedidosMes.error}

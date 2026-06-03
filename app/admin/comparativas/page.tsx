@@ -4,7 +4,11 @@ import { ArrowLeft } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { requirePerfilUsuario, tieneAccesoGlobalAdmin } from "@/lib/auth/session";
-import { fechaCalendarioEnZonaIANA, ZONA_CALENDARIO_OPERACION } from "@/lib/domain/fecha-mes";
+import {
+  fechaCalendarioEnZonaIANA,
+  normalizarFechaCalendarioISO,
+  ZONA_CALENDARIO_OPERACION,
+} from "@/lib/domain/fecha-mes";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { ComparativasPanel } from "@/components/admin/comparativas-panel";
@@ -53,12 +57,14 @@ export default async function AdminComparativasPage() {
       .from("movimientos_diarios_consumo")
       .select("posta_id, medicamento_id, fecha, total_dia")
       .eq("anulado", false)
-      .gte("fecha", inicioSeisMesesStr),
+      .gte("fecha", inicioSeisMesesStr)
+      .lte("fecha", hoyStr),
     supabase
       .from("ingresos_stock_mes")
       .select("posta_id, medicamento_id, fecha, cantidad")
       .eq("anulado", false)
-      .gte("fecha", inicioSeisMesesStr),
+      .gte("fecha", inicioSeisMesesStr)
+      .lte("fecha", hoyStr),
     supabase
       .from("stock_mensual_posta")
       .select("posta_id, medicamento_id, stock_final, stock_recomendado_config, stock_critico_config")
@@ -82,14 +88,14 @@ export default async function AdminComparativasPage() {
   const movimientos = (movsRows ?? []).map((mov) => ({
     postaId: String(mov.posta_id),
     medicamentoId: String(mov.medicamento_id),
-    fecha: String(mov.fecha),
+    fecha: normalizarFechaCalendarioISO(mov.fecha),
     totalDia: Number(mov.total_dia ?? 0),
   }));
 
   const ingresos = (ingresosRows ?? []).map((ing) => ({
     postaId: String(ing.posta_id),
     medicamentoId: String(ing.medicamento_id),
-    fecha: String(ing.fecha),
+    fecha: normalizarFechaCalendarioISO(ing.fecha),
     cantidad: Number(ing.cantidad ?? 0),
   }));
 

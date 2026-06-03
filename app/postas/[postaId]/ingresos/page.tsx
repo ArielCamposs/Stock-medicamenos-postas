@@ -17,8 +17,9 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import {
+  esAdminGeneral,
   puedeGestionarPedidoMensualPosta,
-  puedeRegistrarStockYAvisPosta,
+  puedeRegistrarIngresosPosta,
   requirePerfilUsuario,
 } from "@/lib/auth/session";
 import { anioMesActual, fechaIngresoParaMesMovimiento } from "@/lib/domain/fecha-mes";
@@ -68,7 +69,8 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
   const mesContableYm = `${anio}-${String(mes).padStart(2, "0")}`;
 
   const { profile } = await requirePerfilUsuario();
-  const puedeRegistrarPorRol = puedeRegistrarStockYAvisPosta(profile, postaId);
+  const puedeRegistrarPorRol = puedeRegistrarIngresosPosta(profile, postaId);
+  const soloConsultaAdmin = esAdminGeneral(profile) && !puedeRegistrarPorRol;
   const puedeIngresarPedidoDespachado = puedeGestionarPedidoMensualPosta(profile, postaId);
   const supabase = await createServerSupabaseClient();
   const cierre = await obtenerCierreMensualPosta(supabase, postaId, anio, mes);
@@ -290,7 +292,9 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
             ? "Registra aquí los medicamentos que ingresaron a la posta este mes."
             : cierre
               ? "El mes está cerrado. Para registrar nuevos ingresos, solicita la reapertura del período."
-              : "No tienes permiso para registrar ingresos en este período."
+              : soloConsultaAdmin
+                ? "Modo supervisión: consulta el historial. Los ingresos los registra el encargado de la posta."
+                : "No tienes permiso para registrar ingresos en este período."
         }
       />
 
@@ -355,12 +359,14 @@ export default async function PostaIngresosPage({ params, searchParams }: PagePr
             </div>
             <div>
               <h3 className="font-semibold text-amber-800 dark:text-amber-300">
-                {cierre ? "Período cerrado" : "Sin permiso de carga"}
+                {cierre ? "Período cerrado" : soloConsultaAdmin ? "Solo consulta" : "Sin permiso de carga"}
               </h3>
               <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
                 {cierre
                   ? `El mes de ${tituloMesChile(anio, mes)} ya fue cerrado. Los movimientos de este período están bloqueados. Si necesitas registrar un ingreso, solicita la reapertura del período a administración.`
-                  : "Tu perfil de usuario no tiene permiso para registrar entradas de stock. Contacta al administrador si crees que esto es un error."}
+                  : soloConsultaAdmin
+                    ? "Como administración general puedes revisar las cargas registradas por el encargado. El registro de nuevos ingresos corresponde al encargado de la posta."
+                    : "Tu perfil de usuario no tiene permiso para registrar entradas de stock. Contacta al administrador si crees que esto es un error."}
               </p>
             </div>
           </div>

@@ -6,6 +6,7 @@ import {
   esAdminGeneral,
   puedeGestionarPedidoMensualPosta,
   puedeRegistrarOperacionesPosta,
+  puedeRegistrarIngresosPosta,
   puedeRegistrarStockYAvisPosta,
   puedeVerPosta,
   requirePerfilUsuario,
@@ -55,6 +56,24 @@ async function assertEncargadoPosta(postaId: string) {
   return { ok: true as const, userId: ctx.user.id };
 }
 
+async function assertRegistrarIngresosPosta(postaId: string) {
+  const ctx = await requirePerfilUsuario();
+  if (!puedeVerPosta(ctx.profile, postaId)) {
+    return {
+      ok: false as const,
+      error: "No tienes permiso para esta posta.",
+    };
+  }
+  if (!puedeRegistrarIngresosPosta(ctx.profile, postaId)) {
+    return {
+      ok: false as const,
+      error:
+        "Solo el encargado de la posta puede registrar ingresos de stock. La administración general solo puede consultarlos.",
+    };
+  }
+  return { ok: true as const, userId: ctx.user.id };
+}
+
 async function assertStockYAvisPosta(postaId: string) {
   const ctx = await requirePerfilUsuario();
   if (!puedeVerPosta(ctx.profile, postaId)) {
@@ -67,7 +86,7 @@ async function assertStockYAvisPosta(postaId: string) {
     return {
       ok: false as const,
       error:
-        "Solo el encargado de la posta o un usuario de administración general puede registrar ingresos o declaración AVIS.",
+        "Solo el encargado de la posta o un usuario de administración general puede declarar stock AVIS o ajustar insumos.",
     };
   }
   return { ok: true as const, userId: ctx.user.id };
@@ -366,7 +385,7 @@ export async function registrarIngresosStockLoteAction(
   _prev: PostaActionState,
   formData: FormData
 ): Promise<PostaActionState> {
-  const gate = await assertStockYAvisPosta(postaId);
+  const gate = await assertRegistrarIngresosPosta(postaId);
   if (!gate.ok) {
     return { error: gate.error };
   }
@@ -555,7 +574,7 @@ export async function registrarIngresoStockAction(
   _prev: PostaActionState,
   formData: FormData
 ): Promise<PostaActionState> {
-  const gate = await assertStockYAvisPosta(postaId);
+  const gate = await assertRegistrarIngresosPosta(postaId);
   if (!gate.ok) {
     return { error: gate.error };
   }

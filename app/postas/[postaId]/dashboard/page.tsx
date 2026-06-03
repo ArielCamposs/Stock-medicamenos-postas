@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   puedeRegistrarOperacionesPosta,
+  puedeRegistrarIngresosPosta,
   puedeRegistrarStockYAvisPosta,
   requirePerfilUsuario,
   tieneAccesoGlobalAdmin,
@@ -40,7 +41,8 @@ export default async function PostaDashboardPage({ params }: PageProps) {
   const { postaId } = await params;
   const { profile } = await requirePerfilUsuario();
   const puedeRegistrarDescuentos = puedeRegistrarOperacionesPosta(profile, postaId);
-  const puedeRegistrarIngresosYAvis = puedeRegistrarStockYAvisPosta(profile, postaId);
+  const puedeRegistrarIngresos = puedeRegistrarIngresosPosta(profile, postaId);
+  const puedeRegistrarAvis = puedeRegistrarStockYAvisPosta(profile, postaId);
   const verAdmin = tieneAccesoGlobalAdmin(profile);
   const supabase = await createServerSupabaseClient();
 
@@ -336,7 +338,13 @@ export default async function PostaDashboardPage({ params }: PageProps) {
                   </Link>
                   .
                 </>
-              ) : puedeRegistrarIngresosYAvis ? (
+              ) : puedeRegistrarAvis && !puedeRegistrarIngresos ? (
+                <>
+                  Puede declarar stock AVIS; los ingresos y el descuento diario los registra el
+                  encargado. Mes en pantalla:{" "}
+                  <span className="font-semibold text-foreground">{etiquetaMes}</span>.
+                </>
+              ) : puedeRegistrarIngresos ? (
                 <>
                   Puede cargar ingresos y declarar stock AVIS; el descuento diario lo registra
                   el encargado. Mes en pantalla:{" "}
@@ -492,7 +500,7 @@ export default async function PostaDashboardPage({ params }: PageProps) {
           href={`/postas/${postaId}/ingresos`}
           className={cn(buttonVariants({ variant: "secondary" }), "w-fit text-xs font-semibold px-4.5 h-10 border border-border/80")}
         >
-          {puedeRegistrarIngresosYAvis ? "Registrar ingreso" : "Ver ingresos"}
+          {puedeRegistrarIngresos ? "Registrar ingreso" : "Ver ingresos"}
         </Link>
         <Link
           href={`/postas/${postaId}/avis`}

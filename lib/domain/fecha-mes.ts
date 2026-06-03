@@ -32,6 +32,37 @@ export function fechaISOEnMes(anio: number, mes: number, dia: number) {
   return `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
 }
 
+/** Normaliza `YYYY-MM-DD` o ISO con hora (`2026-06-02T00:00:00Z`) a calendario `YYYY-MM-DD`. */
+export function normalizarFechaCalendarioISO(raw: unknown): string {
+  if (raw == null) return "";
+  const t = String(raw).trim();
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(t);
+  return m ? m[1] : t;
+}
+
+/** Suma días sobre calendario ISO (sin depender de la zona del navegador). */
+export function addDiasCalendarioISO(iso: string, dias: number): string {
+  const norm = normalizarFechaCalendarioISO(iso);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(norm)) return norm;
+  const [y, m, d] = norm.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + dias));
+  return fechaISOEnMes(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+}
+
+export function fechaEnRangoCalendario(fecha: string, desde: string, hasta: string): boolean {
+  const f = normalizarFechaCalendarioISO(fecha);
+  const a = normalizarFechaCalendarioISO(desde);
+  const b = normalizarFechaCalendarioISO(hasta);
+  if (!f || !a || !b) return false;
+  return f >= a && f <= b;
+}
+
+export function fechaPerteneceMesCalendario(fecha: string, mesYYYYMM: string): boolean {
+  const f = normalizarFechaCalendarioISO(fecha);
+  const mes = mesYYYYMM.trim();
+  return mes.length === 7 && f.startsWith(mes);
+}
+
 /** Primer y último día del mes en ISO. */
 export function rangoFechasMesISO(anio: number, mes: number) {
   const last = diasEnMes(anio, mes);

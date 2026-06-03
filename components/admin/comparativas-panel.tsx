@@ -17,8 +17,25 @@ import {
   ChevronDown,
   Hospital
 } from "lucide-react";
+import {
+  CategoriaGrupoCabeceraContenido,
+  CategoriasColapsarTodasBar,
+  useCategoriasColapsables,
+} from "@/components/medicamentos/categoria-grupo-colapsable";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  addDiasCalendarioISO,
+  fechaEnRangoCalendario,
+  fechaPerteneceMesCalendario,
+} from "@/lib/domain/fecha-mes";
+import {
+  CATEGORIAS_AGRUPACION_ADMIN,
+  categoriaAgrupacionAdmin,
+  etiquetaMedicamentoCategoria,
+  type MedicamentoCategoria,
+} from "@/lib/domain/medicamento-categoria";
 import { cn } from "@/lib/utils";
 
 // Tipados de entrada
@@ -43,27 +60,45 @@ interface ComparativasPanelProps {
   hoyStr: string; // Formato YYYY-MM-DD
 }
 
-// Helpers de fecha locales para el cliente
-function parseDate(s: string): Date {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function formatDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function addDays(dateStr: string, days: number): string {
-  const d = parseDate(dateStr);
-  d.setDate(d.getDate() + days);
-  return formatDate(d);
-}
-
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
+}
+
+function ordenarMedicamentosComparativa(
+  meds: Medicamento[],
+  sortBy: "nombre" | "wow" | "mom" | "stock",
+  sortOrder: "asc" | "desc",
+  medStats: Map<string, { w1: number; w2: number; m1: number; m2: number }>,
+  stockMap: Map<string, number>
+): Medicamento[] {
+  const result = [...meds];
+  result.sort((a, b) => {
+    let valA: string | number = 0;
+    let valB: string | number = 0;
+
+    if (sortBy === "nombre") {
+      valA = a.nombre.toLowerCase();
+      valB = b.nombre.toLowerCase();
+    } else if (sortBy === "wow") {
+      const sa = medStats.get(a.id);
+      const sb = medStats.get(b.id);
+      valA = sa ? sa.w1 - sa.w2 : 0;
+      valB = sb ? sb.w1 - sb.w2 : 0;
+    } else if (sortBy === "mom") {
+      const sa = medStats.get(a.id);
+      const sb = medStats.get(b.id);
+      valA = sa ? sa.m1 - sa.m2 : 0;
+      valB = sb ? sb.m1 - sb.m2 : 0;
+    } else if (sortBy === "stock") {
+      valA = stockMap.get(a.id) ?? 0;
+      valB = stockMap.get(b.id) ?? 0;
+    }
+
+    if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+    if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+    return 0;
+  });
+  return result;
 }
 
 export function ComparativasPanel({
@@ -91,16 +126,21 @@ export function ComparativasPanel({
   // Ordenamiento de tabla de comparación cruzada
   const [sortByCompare, setSortByCompare] = useState<"nombre" | "postaA" | "postaB" | "diferencia">("nombre");
   const [sortOrderCompare, setSortOrderCompare] = useState<"asc" | "desc">("asc");
+  const [busquedaMed, setBusquedaMed] = useState("");
+
+  const colapsables = useCategoriasColapsables();
+  const busquedaMedNorm = busquedaMed.trim().toLowerCase();
+  const forzarCategoriasExpandidas = busquedaMedNorm.length > 0;
 
   const [y, m, d] = useMemo(() => hoyStr.split("-").map(Number), [hoyStr]);
 
   // Rangos de Fechas
   const dateRanges = useMemo(() => {
     // WoW
-    const w1Start = addDays(hoyStr, -6);
+    const w1Start = addDiasCalendarioISO(hoyStr, -6);
     const w1End = hoyStr;
-    const w2Start = addDays(hoyStr, -13);
-    const w2End = addDays(hoyStr, -7);
+    const w2Start = addDiasCalendarioISO(hoyStr, -13);
+    const w2End = addDiasCalendarioISO(hoyStr, -7);
 
     // MoM (Relativo)
     const m1Start = `${y}-${String(m).padStart(2, "0")}-01`;
@@ -179,16 +219,16 @@ export function ComparativasPanel({
       const stats = map.get(mid)!;
 
       // Evaluar WoW
-      if (mov.fecha >= dateRanges.w1Start && mov.fecha <= dateRanges.w1End) {
+      if (fechaEnRangoCalendario(mov.fecha, dateRanges.w1Start, dateRanges.w1End)) {
         stats.w1 += mov.totalDia;
-      } else if (mov.fecha >= dateRanges.w2Start && mov.fecha <= dateRanges.w2End) {
+      } else if (fechaEnRangoCalendario(mov.fecha, dateRanges.w2Start, dateRanges.w2End)) {
         stats.w2 += mov.totalDia;
       }
 
       // Evaluar MoM
-      if (mov.fecha >= dateRanges.m1Start && mov.fecha <= dateRanges.m1End) {
+      if (fechaEnRangoCalendario(mov.fecha, dateRanges.m1Start, dateRanges.m1End)) {
         stats.m1 += mov.totalDia;
-      } else if (mov.fecha >= dateRanges.m2Start && mov.fecha <= dateRanges.m2End) {
+      } else if (fechaEnRangoCalendario(mov.fecha, dateRanges.m2Start, dateRanges.m2End)) {
         stats.m2 += mov.totalDia;
       }
     }
@@ -236,7 +276,7 @@ export function ComparativasPanel({
     // Balance de entradas y salidas en el mes actual
     let ingresosM1 = 0;
     for (const ing of filteredIngresos) {
-      if (ing.fecha >= dateRanges.m1Start && ing.fecha <= dateRanges.m1End) {
+      if (fechaEnRangoCalendario(ing.fecha, dateRanges.m1Start, dateRanges.m1End)) {
         ingresosM1 += ing.cantidad;
       }
     }
@@ -259,12 +299,12 @@ export function ComparativasPanel({
     return dateRanges.monthsList.map(({ label, key }) => {
       // Sumar consumos del mes
       const egr = filteredMovs
-        .filter((m) => m.fecha.startsWith(key))
+        .filter((m) => fechaPerteneceMesCalendario(m.fecha, key))
         .reduce((sum, item) => sum + item.totalDia, 0);
 
       // Sumar ingresos del mes
       const ing = filteredIngresos
-        .filter((i) => i.fecha.startsWith(key))
+        .filter((i) => fechaPerteneceMesCalendario(i.fecha, key))
         .reduce((sum, item) => sum + item.cantidad, 0);
 
       return {
@@ -276,48 +316,34 @@ export function ComparativasPanel({
     });
   }, [filteredMovs, filteredIngresos, dateRanges]);
 
-  // Lista de Medicamentos filtrada y ordenada para la pestaña principal
-  const filteredAndSortedMeds = useMemo(() => {
-    // 1. Filtrado
-    const query = searchQuery.trim().toLowerCase();
-    const result = medicamentos.filter((med) => {
-      if (query === "") return true;
-      return (
-        med.nombre.toLowerCase().includes(query) ||
-        med.categoria.toLowerCase().includes(query)
+  const medicamentosFiltradosPorNombre = useMemo(() => {
+    if (busquedaMedNorm === "") return medicamentos;
+    return medicamentos.filter((med) =>
+      med.nombre.toLowerCase().includes(busquedaMedNorm)
+    );
+  }, [medicamentos, busquedaMedNorm]);
+
+  const medsAgrupadosPorCategoria = useMemo(() => {
+    const grupos: { cat: MedicamentoCategoria; meds: Medicamento[] }[] = [];
+    for (const cat of CATEGORIAS_AGRUPACION_ADMIN) {
+      const lista = medicamentosFiltradosPorNombre.filter(
+        (m) => categoriaAgrupacionAdmin(m.categoria) === cat
       );
-    });
+      if (lista.length === 0) continue;
+      grupos.push({
+        cat,
+        meds: ordenarMedicamentosComparativa(lista, sortBy, sortOrder, medStats, stockMap),
+      });
+    }
+    return grupos;
+  }, [medicamentosFiltradosPorNombre, sortBy, sortOrder, medStats, stockMap]);
 
-    // 2. Ordenado
-    result.sort((a, b) => {
-      let valA: any = 0;
-      let valB: any = 0;
+  const categoriasVisiblesWowMom = useMemo(
+    () => medsAgrupadosPorCategoria.map((g) => g.cat),
+    [medsAgrupadosPorCategoria]
+  );
 
-      if (sortBy === "nombre") {
-        valA = a.nombre.toLowerCase();
-        valB = b.nombre.toLowerCase();
-      } else if (sortBy === "wow") {
-        const sa = medStats.get(a.id);
-        const sb = medStats.get(b.id);
-        valA = sa ? sa.w1 - sa.w2 : 0;
-        valB = sb ? sb.w1 - sb.w2 : 0;
-      } else if (sortBy === "mom") {
-        const sa = medStats.get(a.id);
-        const sb = medStats.get(b.id);
-        valA = sa ? sa.m1 - sa.m2 : 0;
-        valB = sb ? sb.m1 - sb.m2 : 0;
-      } else if (sortBy === "stock") {
-        valA = stockMap.get(a.id) ?? 0;
-        valB = stockMap.get(b.id) ?? 0;
-      }
-
-      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
-      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return result;
-  }, [medicamentos, searchQuery, sortBy, sortOrder, medStats, stockMap]);
+  const totalMedsFiltradosWowMom = medicamentosFiltradosPorNombre.length;
 
   // Lógica de comparación cruzada entre Posta A y Posta B
   const crossCompareStats = useMemo(() => {
@@ -332,10 +358,10 @@ export function ComparativasPanel({
       const mid = m.medicamentoId;
       if (!mapA.has(mid)) mapA.set(mid, { week: 0, month: 0 });
       const stats = mapA.get(mid)!;
-      if (m.fecha >= dateRanges.w1Start && m.fecha <= dateRanges.w1End) {
+      if (fechaEnRangoCalendario(m.fecha, dateRanges.w1Start, dateRanges.w1End)) {
         stats.week += m.totalDia;
       }
-      if (m.fecha >= dateRanges.m1Start && m.fecha <= dateRanges.m1End) {
+      if (fechaEnRangoCalendario(m.fecha, dateRanges.m1Start, dateRanges.m1End)) {
         stats.month += m.totalDia;
       }
     }
@@ -345,10 +371,10 @@ export function ComparativasPanel({
       const mid = m.medicamentoId;
       if (!mapB.has(mid)) mapB.set(mid, { week: 0, month: 0 });
       const stats = mapB.get(mid)!;
-      if (m.fecha >= dateRanges.w1Start && m.fecha <= dateRanges.w1End) {
+      if (fechaEnRangoCalendario(m.fecha, dateRanges.w1Start, dateRanges.w1End)) {
         stats.week += m.totalDia;
       }
-      if (m.fecha >= dateRanges.m1Start && m.fecha <= dateRanges.m1End) {
+      if (fechaEnRangoCalendario(m.fecha, dateRanges.m1Start, dateRanges.m1End)) {
         stats.month += m.totalDia;
       }
     }
@@ -486,18 +512,6 @@ export function ComparativasPanel({
             </div>
           </div>
 
-          {activeTab === "wow-mom" && (
-            <div className="relative w-full max-w-[320px] shrink-0">
-              <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Buscar medicamento o categoría..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-xs border-border/80 bg-background/50 focus-visible:ring-primary"
-              />
-            </div>
-          )}
         </div>
       )}
 
@@ -756,6 +770,49 @@ export function ComparativasPanel({
 
       {/* Contenido de Tab: WoW / MoM */}
       {activeTab === "wow-mom" && (
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-md">
+              <Label htmlFor="comparativa-buscar-med" className="text-xs font-medium">
+                Buscar por nombre
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                <Input
+                  id="comparativa-buscar-med"
+                  type="search"
+                  autoComplete="off"
+                  placeholder="Nombre del medicamento…"
+                  value={busquedaMed}
+                  onChange={(e) => setBusquedaMed(e.target.value)}
+                  className="pl-9 h-9 text-sm border-border/80 bg-background/50 focus-visible:ring-primary"
+                />
+              </div>
+            </div>
+            {busquedaMed.trim() !== "" ? (
+              <button
+                type="button"
+                className="shrink-0 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+                onClick={() => setBusquedaMed("")}
+              >
+                Limpiar búsqueda
+              </button>
+            ) : null}
+          </div>
+
+          {categoriasVisiblesWowMom.length > 0 ? (
+            <CategoriasColapsarTodasBar
+              categorias={categoriasVisiblesWowMom}
+              onExpandirTodas={colapsables.expandirTodas}
+              onColapsarTodas={colapsables.colapsarTodas}
+            />
+          ) : null}
+
+          <p className="text-xs text-muted-foreground">
+            Mostrando {totalMedsFiltradosWowMom} de {medicamentos.length} medicamentos
+            {selectedPostaId !== "all" ? ` · ${selectedPostaNombre}` : " · todas las postas"}.
+          </p>
+
         <Card className="overflow-hidden border border-border/80 bg-card/30 shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm text-left">
@@ -808,92 +865,143 @@ export function ComparativasPanel({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {filteredAndSortedMeds.length === 0 ? (
+                {medsAgrupadosPorCategoria.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-6 py-12 text-center text-muted-foreground">
-                      No se encontraron medicamentos para esta búsqueda.
+                      {busquedaMedNorm !== ""
+                        ? `No hay medicamentos cuyo nombre coincida con «${busquedaMed.trim()}».`
+                        : "No hay medicamentos para mostrar."}
                     </td>
                   </tr>
                 ) : (
-                  filteredAndSortedMeds.map((med) => {
-                    const stats = medStats.get(med.id) || { w1: 0, w2: 0, m1: 0, m2: 0 };
-                    const stock = stockMap.get(med.id) ?? 0;
-
-                    const diffW = stats.w1 - stats.w2;
-                    const pctW = stats.w2 === 0 ? 0 : Math.round((diffW / stats.w2) * 100);
-
-                    const diffM = stats.m1 - stats.m2;
-                    const pctM = stats.m2 === 0 ? 0 : Math.round((diffM / stats.m2) * 100);
-
+                  medsAgrupadosPorCategoria.map(({ cat, meds }) => {
+                    const expandida = colapsables.estaExpandida(cat, forzarCategoriasExpandidas);
                     return (
-                      <tr key={med.id} className="hover:bg-muted/20 transition-colors duration-150">
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-semibold text-foreground">{med.nombre}</span>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted-foreground">
-                              <span className="inline-flex rounded-md bg-muted px-1.5 py-0.5 uppercase font-semibold font-mono tracking-wider">
-                                {med.categoria}
-                              </span>
-                              <span>·</span>
-                              <span>{med.unidadMedida}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="font-medium text-foreground tabular-nums">
-                              {stats.w1} <span className="text-[10px] text-muted-foreground/60">esta sem.</span>
-                            </span>
-                            <span className="text-[10px] text-muted-foreground/75 tabular-nums">
-                              {stats.w2} ant.
-                            </span>
-                            {diffW > 0 ? (
-                              <span className="inline-flex items-center mt-1 text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                                <ArrowUpRight className="size-2.5 mr-0.5 shrink-0" />
-                                +{pctW}% (+{diffW})
-                              </span>
-                            ) : diffW < 0 ? (
-                              <span className="inline-flex items-center mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                <ArrowDownRight className="size-2.5 mr-0.5 shrink-0" />
-                                {pctW}% ({diffW})
-                              </span>
-                            ) : (
-                              <span className="inline-flex mt-1 text-[10px] font-medium text-muted-foreground/60">—</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="font-medium text-foreground tabular-nums">
-                              {stats.m1} <span className="text-[10px] text-muted-foreground/60">este mes</span>
-                            </span>
-                            <span className="text-[10px] text-muted-foreground/75 tabular-nums">
-                              {stats.m2} ant.
-                            </span>
-                            {diffM > 0 ? (
-                              <span className="inline-flex items-center mt-1 text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                                <ArrowUpRight className="size-2.5 mr-0.5 shrink-0" />
-                                +{pctM}% (+{diffM})
-                              </span>
-                            ) : diffM < 0 ? (
-                              <span className="inline-flex items-center mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                <ArrowDownRight className="size-2.5 mr-0.5 shrink-0" />
-                                {pctM}% ({diffM})
-                              </span>
-                            ) : (
-                              <span className="inline-flex mt-1 text-[10px] font-medium text-muted-foreground/60">—</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right tabular-nums">
-                          <div className="flex flex-col items-end justify-center h-full">
-                            <span className={cn("font-bold text-sm", stock > 0 ? "text-foreground" : "text-muted-foreground/40")}>
-                              {stock}
-                            </span>
-                            <span className="text-[9px] text-muted-foreground/50 font-medium">unidades</span>
-                          </div>
-                        </td>
-                      </tr>
+                      <React.Fragment key={cat}>
+                        <tr className="bg-muted/50">
+                          <td colSpan={4} className="px-4 py-2">
+                            <CategoriaGrupoCabeceraContenido
+                              etiqueta={etiquetaMedicamentoCategoria[cat]}
+                              expandida={expandida}
+                              onToggle={() => colapsables.toggle(cat)}
+                              cantidad={meds.length}
+                              className="px-1 py-1"
+                            />
+                          </td>
+                        </tr>
+                        {expandida
+                          ? meds.map((med) => {
+                              const stats = medStats.get(med.id) || {
+                                w1: 0,
+                                w2: 0,
+                                m1: 0,
+                                m2: 0,
+                              };
+                              const stock = stockMap.get(med.id) ?? 0;
+
+                              const diffW = stats.w1 - stats.w2;
+                              const pctW =
+                                stats.w2 === 0 ? 0 : Math.round((diffW / stats.w2) * 100);
+
+                              const diffM = stats.m1 - stats.m2;
+                              const pctM =
+                                stats.m2 === 0 ? 0 : Math.round((diffM / stats.m2) * 100);
+
+                              return (
+                                <tr
+                                  key={med.id}
+                                  className="hover:bg-muted/20 transition-colors duration-150"
+                                >
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col">
+                                      <span className="font-semibold text-foreground">
+                                        {med.nombre}
+                                      </span>
+                                      <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                        <span className="font-mono tracking-wider">
+                                          {med.unidadMedida}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    <div className="flex flex-col items-end">
+                                      <span className="font-medium text-foreground tabular-nums">
+                                        {stats.w1}{" "}
+                                        <span className="text-[10px] text-muted-foreground/60">
+                                          esta sem.
+                                        </span>
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground/75 tabular-nums">
+                                        {stats.w2} ant.
+                                      </span>
+                                      {diffW > 0 ? (
+                                        <span className="mt-1 inline-flex items-center text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                                          <ArrowUpRight className="mr-0.5 size-2.5 shrink-0" />
+                                          +{pctW}% (+{diffW})
+                                        </span>
+                                      ) : diffW < 0 ? (
+                                        <span className="mt-1 inline-flex items-center text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                          <ArrowDownRight className="mr-0.5 size-2.5 shrink-0" />
+                                          {pctW}% ({diffW})
+                                        </span>
+                                      ) : (
+                                        <span className="mt-1 inline-flex text-[10px] font-medium text-muted-foreground/60">
+                                          —
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    <div className="flex flex-col items-end">
+                                      <span className="font-medium text-foreground tabular-nums">
+                                        {stats.m1}{" "}
+                                        <span className="text-[10px] text-muted-foreground/60">
+                                          este mes
+                                        </span>
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground/75 tabular-nums">
+                                        {stats.m2} ant.
+                                      </span>
+                                      {diffM > 0 ? (
+                                        <span className="mt-1 inline-flex items-center text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                                          <ArrowUpRight className="mr-0.5 size-2.5 shrink-0" />
+                                          +{pctM}% (+{diffM})
+                                        </span>
+                                      ) : diffM < 0 ? (
+                                        <span className="mt-1 inline-flex items-center text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                          <ArrowDownRight className="mr-0.5 size-2.5 shrink-0" />
+                                          {pctM}% ({diffM})
+                                        </span>
+                                      ) : (
+                                        <span className="mt-1 inline-flex text-[10px] font-medium text-muted-foreground/60">
+                                          —
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-right tabular-nums">
+                                    <div className="flex h-full flex-col items-end justify-center">
+                                      <span
+                                        className={cn(
+                                          "text-sm font-bold",
+                                          stock > 0
+                                            ? "text-foreground"
+                                            : "text-muted-foreground/40"
+                                        )}
+                                      >
+                                        {stock}
+                                      </span>
+                                      <span className="text-[9px] font-medium text-muted-foreground/50">
+                                        unidades
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          : null}
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -901,6 +1009,7 @@ export function ComparativasPanel({
             </table>
           </div>
         </Card>
+        </div>
       )}
 
       {/* Contenido de Tab: Comparar entre Postas */}

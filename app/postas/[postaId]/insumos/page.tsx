@@ -12,7 +12,6 @@ import {
   puedeGestionarPedidoMensualPosta,
   puedeRegistrarStockYAvisPosta,
   requirePerfilUsuario,
-  tieneAccesoGlobalAdmin,
 } from "@/lib/auth/session";
 import { etiquetaInstanteChile24h } from "@/lib/domain/fecha-mes";
 import { postaEnvioPedidoInsumosHoy } from "@/lib/posta/reglas-repeticion-dia";
@@ -296,11 +295,6 @@ export default async function PostaInsumosPage({ params, searchParams }: PagePro
             ) : (
               "Registra stock y pide insumos a administración."
             )}
-            {tieneAccesoGlobalAdmin(profile) ? (
-              <span className="mt-2 block rounded-md border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-950 dark:text-sky-50">
-                Vista desde supervisión: este formulario corresponde a la posta indicada arriba.
-              </span>
-            ) : null}
           </>
         }
       />

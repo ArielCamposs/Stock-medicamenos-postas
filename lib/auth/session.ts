@@ -181,7 +181,7 @@ export function puedeVerPosta(profile: PerfilUsuarioRow, postaId: string) {
 
 /**
  * Descuento diario y pedidos del mes: solo el encargado de esa posta.
- * La administración general puede ver todo y cargar ingresos/AVIS, pero no descuentos ni pedidos desde la vista de posta.
+ * La administración general puede ver todo y declarar AVIS, pero no registra ingresos ni descuentos desde la vista de posta.
  */
 export function puedeRegistrarOperacionesPosta(
   profile: PerfilUsuarioRow,
@@ -206,9 +206,17 @@ export function puedeGestionarPedidoMensualPosta(
   );
 }
 
+/** Entradas de stock (ingresos): solo el encargado de la posta. Admin y supervisión solo consultan. */
+export function puedeRegistrarIngresosPosta(
+  profile: PerfilUsuarioRow,
+  postaId: string
+): boolean {
+  return puedeRegistrarOperacionesPosta(profile, postaId);
+}
+
 /**
- * Ingresos de stock y declaración mensual AVIS: encargado de la posta o administración general.
- * No aplica a descuentos diarios (`puedeRegistrarOperacionesPosta`).
+ * Declaración mensual AVIS e inventario de insumos en posta: encargado o administración general.
+ * No incluye ingresos de medicamentos (`puedeRegistrarIngresosPosta`).
  */
 export function puedeRegistrarStockYAvisPosta(
   profile: PerfilUsuarioRow,
