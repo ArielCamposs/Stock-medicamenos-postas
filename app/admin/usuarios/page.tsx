@@ -91,7 +91,7 @@ export default async function AdminUsuariosPage() {
           <h1 className="font-heading text-2xl font-semibold tracking-tight">Usuarios</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Crea y administra encargados de posta y usuarios de bodega farmacia. La administración
-            general sigue gestionándose en Supabase.
+            general sigue gestionándose por informática.
           </p>
         </div>
         <Link
@@ -106,8 +106,7 @@ export default async function AdminUsuariosPage() {
         <CardHeader>
           <CardTitle className="text-base">Gestión de cuentas</CardTitle>
           <CardDescription>
-            Crear, editar sede/rol, activar o desactivar, cambiar contraseña y eliminar cuentas
-            operativas.
+            Lista de cuentas operativas. Usa «Nuevo usuario» o «Editar» en cada fila.
           </CardDescription>
         </CardHeader>
         <CardContent>

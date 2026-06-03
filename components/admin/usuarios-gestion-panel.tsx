@@ -53,6 +53,8 @@ type Props = {
 
 const INICIAL: AdminUsuarioActionState = {};
 
+type DialogModo = "nuevo" | "editar";
+
 type EditForm = {
   id: string;
   email: string;
@@ -85,12 +87,15 @@ export function UsuariosGestionPanel({
 
   const [rolCrear, setRolCrear] = useState<RolUsuarioDb>("POSTA_MANAGER");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [modo, setModo] = useState<DialogModo>("nuevo");
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [confirmarEliminar, setConfirmarEliminar] = useState(false);
 
   useEffect(() => {
     if (stateCrear.ok) {
       toast(stateCrear.success ?? "Usuario creado.", "success");
+      setDialogOpen(false);
+      setRolCrear("POSTA_MANAGER");
       router.refresh();
     } else if (stateCrear.error) {
       toast(stateCrear.error, "error");
@@ -119,7 +124,16 @@ export function UsuariosGestionPanel({
     }
   }, [stateEliminar, toast, router]);
 
+  function abrirNuevo() {
+    setModo("nuevo");
+    setRolCrear("POSTA_MANAGER");
+    setEditForm(null);
+    setConfirmarEliminar(false);
+    setDialogOpen(true);
+  }
+
   function abrirEditar(u: UsuarioListaRow) {
+    setModo("editar");
     setEditForm({
       id: u.id,
       email: u.email ?? "",
@@ -164,80 +178,17 @@ export function UsuariosGestionPanel({
   }
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-4 max-w-lg">
-        <h2 className="font-heading text-lg font-medium">Nuevo usuario</h2>
-        <p className="text-sm text-muted-foreground">
-          Bodega farmacia despacha pedidos aprobados. Encargado de posta opera su sede.
-        </p>
-        <form action={crearAction} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="usuario-email">Correo</Label>
-            <Input
-              id="usuario-email"
-              name="email"
-              type="email"
-              required
-              autoComplete="off"
-              placeholder="encargado@ejemplo.cl"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="usuario-nombre">Nombre (opcional)</Label>
-            <Input id="usuario-nombre" name="nombre" type="text" maxLength={120} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="usuario-password">Contraseña inicial</Label>
-            <Input
-              id="usuario-password"
-              name="password"
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-            />
-            <p className="text-xs text-muted-foreground">Mínimo 8 caracteres.</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="usuario-rol">Rol</Label>
-            <select
-              id="usuario-rol"
-              name="rol"
-              required
-              value={rolCrear}
-              onChange={(e) => setRolCrear(e.target.value as RolUsuarioDb)}
-              className={selectClassName}
-            >
-              <option value="POSTA_MANAGER">{ETIQUETA_ROL_USUARIO.POSTA_MANAGER}</option>
-              <option value="BODEGA_FARMACIA">{ETIQUETA_ROL_USUARIO.BODEGA_FARMACIA}</option>
-            </select>
-          </div>
-          {rolCrear === "POSTA_MANAGER" ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="usuario-posta">Posta</Label>
-              <select id="usuario-posta" name="posta_id" required className={selectClassName}>
-                <option value="">Selecciona una posta…</option>
-                {postas.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre}
-                    {p.codigo ? ` (${p.codigo})` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <input type="hidden" name="posta_id" value="" />
-          )}
-          <Button type="submit" disabled={pendingCrear}>
-            {pendingCrear ? "Creando…" : "Crear usuario"}
-          </Button>
-        </form>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="font-heading text-lg font-medium">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-heading text-base font-medium">
           Usuarios registrados ({usuarios.length})
         </h2>
+        <Button type="button" size="sm" onClick={abrirNuevo}>
+          + Nuevo usuario
+        </Button>
+      </div>
+
+      <section className="space-y-3">
         {usuarios.length === 0 ? (
           <p className="text-sm text-muted-foreground">No hay perfiles para mostrar.</p>
         ) : (
@@ -302,7 +253,7 @@ export function UsuariosGestionPanel({
                           Editar
                         </Button>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Solo Supabase</span>
+                        <span className="text-xs text-muted-foreground">Solo informática</span>
                       )}
                     </td>
                   </tr>
@@ -313,7 +264,7 @@ export function UsuariosGestionPanel({
         )}
         {gestionables.length === 0 && usuarios.length > 0 ? (
           <p className="text-xs text-muted-foreground">
-            Los perfiles de administración general aparecen listados pero se editan en Supabase.
+            Los perfiles de administración general aparecen listados pero se editan por informática.
           </p>
         ) : null}
       </section>
@@ -330,9 +281,86 @@ export function UsuariosGestionPanel({
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Editar usuario</DialogTitle>
+            <DialogTitle>{modo === "nuevo" ? "Nuevo usuario" : "Editar usuario"}</DialogTitle>
           </DialogHeader>
-          {editForm ? (
+
+          {modo === "nuevo" ? (
+            <form action={crearAction} className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Bodega farmacia despacha pedidos aprobados. Encargado de posta opera su sede.
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="usuario-email">Correo</Label>
+                <Input
+                  id="usuario-email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="off"
+                  placeholder="encargado@ejemplo.cl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="usuario-nombre">Nombre (opcional)</Label>
+                <Input id="usuario-nombre" name="nombre" type="text" maxLength={120} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="usuario-password">Contraseña inicial</Label>
+                <Input
+                  id="usuario-password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                />
+                <p className="text-xs text-muted-foreground">Mínimo 8 caracteres.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="usuario-rol">Rol</Label>
+                <select
+                  id="usuario-rol"
+                  name="rol"
+                  required
+                  value={rolCrear}
+                  onChange={(e) => setRolCrear(e.target.value as RolUsuarioDb)}
+                  className={selectClassName}
+                >
+                  <option value="POSTA_MANAGER">{ETIQUETA_ROL_USUARIO.POSTA_MANAGER}</option>
+                  <option value="BODEGA_FARMACIA">{ETIQUETA_ROL_USUARIO.BODEGA_FARMACIA}</option>
+                </select>
+              </div>
+              {rolCrear === "POSTA_MANAGER" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="usuario-posta">Posta</Label>
+                  <select id="usuario-posta" name="posta_id" required className={selectClassName}>
+                    <option value="">Selecciona una posta…</option>
+                    {postas.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                        {p.codigo ? ` (${p.codigo})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <input type="hidden" name="posta_id" value="" />
+              )}
+              <DialogFooter className="gap-2 sm:justify-end px-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={pendingCrear}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={pendingCrear}>
+                  {pendingCrear ? "Creando…" : "Crear usuario"}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : editForm ? (
             <div className="space-y-4">
               <form onSubmit={handleEditSubmit} className="space-y-4">
                 <div className="space-y-1.5">

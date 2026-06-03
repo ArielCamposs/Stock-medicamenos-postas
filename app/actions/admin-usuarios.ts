@@ -126,7 +126,7 @@ function errorSiPerfilProtegido(
     return "No puedes modificar ni eliminar tu propia cuenta desde aquí.";
   }
   if (perfil.rol === "ADMIN_GENERAL" || perfil.rol === "READ_ONLY") {
-    return "Los usuarios de administración general y supervisión solo se gestionan en Supabase.";
+    return "Los usuarios de administración general y supervisión solo los gestiona informática.";
   }
   if (!ROLES_DESDE_APP.includes(perfil.rol)) {
     return "Este perfil no se puede gestionar desde la app.";
