@@ -6,6 +6,7 @@ import {
   type FilaStockInsumoDashboard,
 } from "@/components/posta/stock-insumos-dashboard";
 import { StockTablaDashboard, type FilaStockTabla } from "@/components/posta/stock-tabla-dashboard";
+import { DashboardEstadisticas } from "@/components/posta/dashboard-estadisticas";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -30,6 +31,7 @@ import {
   snapshotLedgerMesPosta,
   type MedLedgerMin,
 } from "@/lib/posta/snapshot-ledger-mes-posta";
+import { cargarPedidosMensualesMes } from "@/lib/posta/pedidos-mensuales-por-tipo";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +62,15 @@ export default async function PostaDashboardPage({ params }: PageProps) {
 
   const insumosHref = `/postas/${postaId}/insumos`;
 
-  const [{ data: medicamentos }, { data: curStock }, { data: movs }, { data: avisRows }, { data: insumos }, { data: stockInsumosRows }] =
+  const [
+    { data: medicamentos },
+    { data: curStock },
+    { data: movs },
+    { data: avisRows },
+    { data: insumos },
+    { data: stockInsumosRows },
+    pedidosMes
+  ] =
     await Promise.all([
       supabase
         .from("medicamentos")
@@ -102,6 +112,7 @@ export default async function PostaDashboardPage({ params }: PageProps) {
         .from("stock_insumos_posta")
         .select("insumo_id, cantidad")
         .eq("posta_id", postaId),
+      cargarPedidosMensualesMes(supabase, postaId, anio, mes),
     ]);
 
   const medsRows = medicamentos && Array.isArray(medicamentos) ? medicamentos : [];
@@ -205,6 +216,8 @@ export default async function PostaDashboardPage({ params }: PageProps) {
       stockAvis: stockAvisPorMed.get(m.id) ?? 0,
       nivel,
       tono,
+      ingresoMes: s.ingreso_mes,
+      descuentoMes: s.descuento_mes,
     });
   }
 
@@ -466,6 +479,14 @@ export default async function PostaDashboardPage({ params }: PageProps) {
           );
         })}
       </div>
+
+      <DashboardEstadisticas
+        filas={filasStock}
+        pedidoGeneral={pedidosMes.general.pedido}
+        pedidoContra={pedidosMes.contraReceta.pedido}
+        postaId={postaId}
+        ymQuery={ymParam}
+      />
 
       <StockTablaDashboard filas={filasStock} descuentoMesHref={descuentoMesHref} />
 

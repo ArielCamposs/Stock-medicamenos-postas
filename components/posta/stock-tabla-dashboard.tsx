@@ -39,6 +39,8 @@ export type FilaStockTabla = {
   stockAvis: number;
   nivel: "critico" | "cerca" | null;
   tono: "alerta" | "regular" | "ok";
+  ingresoMes?: number;
+  descuentoMes?: number;
 };
 
 export function StockTablaDashboard({

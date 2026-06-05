@@ -1,6 +1,6 @@
 "use client";
 
-import { Package } from "lucide-react";
+import { Package, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -323,20 +323,23 @@ export function ConsumoMensualPanel({
 
       {medicamentos.length > 0 ? (
         <div className="space-y-2">
-          <div className="mx-auto max-w-xl space-y-1.5">
-            <Label htmlFor="descuento-buscar-med" className="text-xs font-medium">
+          <div className="mx-auto max-w-xl space-y-2">
+            <Label htmlFor="descuento-buscar-med" className="text-sm font-semibold text-foreground/90">
               Buscar medicamento
             </Label>
-            <Input
-              id="descuento-buscar-med"
-              type="search"
-              enterKeyHint="search"
-              autoComplete="off"
-              placeholder="Nombre o código interno"
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="w-full"
-            />
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground/80" />
+              <Input
+                id="descuento-buscar-med"
+                type="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                placeholder="Nombre o código interno..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="w-full h-11 pl-11 pr-4 text-base focus-visible:ring-2 focus-visible:ring-primary shadow-sm"
+              />
+            </div>
           </div>
         </div>
       ) : null}
